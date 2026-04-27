@@ -2,10 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from trader.engine import EventEngine
-from trader.event import (
-    EVENT_TD_CONNECTED, EVENT_TD_LOGIN,
-    EVENT_ORDER, EVENT_TRADE, EVENT_POSITION, EVENT_ACCOUNT,
-)
+from trader.event import Event, EventType
 
 
 def make_mock_td_api():
@@ -62,14 +59,14 @@ class TestTdGatewayCallbacks:
 
             spi = td_api.RegisterSpi.call_args[0][0]
             received = []
-            engine.register(EVENT_TD_CONNECTED, lambda e: received.append(e))
+            engine.register(EventType.TD_CONNECTED, lambda e: received.append(e))
 
             spi.OnFrontConnected()
             engine.process_one()
 
             assert gw.status == "connected"
             assert len(received) == 1
-            assert received[0].type == EVENT_TD_CONNECTED
+            assert received[0].type == EventType.TD_CONNECTED
 
     def test_on_rsp_user_login_puts_event(self):
         engine = EventEngine()
@@ -86,7 +83,7 @@ class TestTdGatewayCallbacks:
             engine.process_one()
 
             received = []
-            engine.register(EVENT_TD_LOGIN, lambda e: received.append(e))
+            engine.register(EventType.TD_LOGIN, lambda e: received.append(e))
 
             rsp = MagicMock()
             rsp.FrontID = 1
@@ -120,7 +117,7 @@ class TestTdGatewayCallbacks:
             engine.process_one()
 
             received = []
-            engine.register(EVENT_ORDER, lambda e: received.append(e))
+            engine.register(EventType.ORDER, lambda e: received.append(e))
 
             order = MagicMock()
             order.InstrumentID = "rb2501"
@@ -151,7 +148,7 @@ class TestTdGatewayCallbacks:
             engine.process_one()
 
             received = []
-            engine.register(EVENT_TRADE, lambda e: received.append(e))
+            engine.register(EventType.TRADE, lambda e: received.append(e))
 
             trade = MagicMock()
             trade.InstrumentID = "rb2501"
@@ -184,7 +181,7 @@ class TestTdGatewayCallbacks:
             engine.process_one()
 
             received = []
-            engine.register(EVENT_POSITION, lambda e: received.append(e))
+            engine.register(EventType.POSITION, lambda e: received.append(e))
 
             pos = MagicMock()
             pos.InstrumentID = "rb2501"
@@ -213,7 +210,7 @@ class TestTdGatewayCallbacks:
             engine.process_one()
 
             received = []
-            engine.register(EVENT_ACCOUNT, lambda e: received.append(e))
+            engine.register(EventType.ACCOUNT, lambda e: received.append(e))
 
             acc = MagicMock()
             acc.AccountID = "668888"
@@ -254,8 +251,8 @@ class TestTdGatewaySendOrder:
             from trader.gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             self._connect_and_logined(gw, td_api)
-            engine.process_one()  # consume EVENT_TD_LOGIN
-            engine.process_one()  # consume EVENT_TD_CONNECTED
+            engine.process_one()  # consume EventType.TD_LOGIN
+            engine.process_one()  # consume EventType.TD_CONNECTED
 
             order_ref = gw.send_order(
                 instrument_id="rb2501",

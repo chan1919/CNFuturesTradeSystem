@@ -7,7 +7,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 from trader.engine import EventEngine
-from trader.event import Event, EVENT_MD_CONNECTED, EVENT_MD_LOGIN, EVENT_TICK, EVENT_MD_DISCONNECTED
+from trader.event import Event, EventType
 
 
 # ---- helpers ----
@@ -65,7 +65,7 @@ class TestMdGatewayCallbacks:
         return spi
 
     def test_on_front_connected_puts_event(self):
-        """OnFrontConnected 回调应推送 EVENT_MD_CONNECTED"""
+        """OnFrontConnected 回调应推送 EventType.MD_CONNECTED"""
         engine = EventEngine()
         md_api = make_mock_md_api()
 
@@ -77,19 +77,19 @@ class TestMdGatewayCallbacks:
 
             spi = md_api.RegisterSpi.call_args[0][0]
             received = []
-            engine.register(EVENT_MD_CONNECTED, lambda e: received.append(e))
+            engine.register(EventType.MD_CONNECTED, lambda e: received.append(e))
 
-            # OnFrontConnected pushes EVENT_MD_CONNECTED + calls login()
+            # OnFrontConnected pushes EventType.MD_CONNECTED + calls login()
             # login() tries to create ReqUserLoginField from mock → fine
             spi.OnFrontConnected()
             engine.process_one()
 
             assert gw.status == "connected"
             assert len(received) == 1
-            assert received[0].type == EVENT_MD_CONNECTED
+            assert received[0].type == EventType.MD_CONNECTED
 
     def test_on_rsp_user_login_puts_event(self):
-        """OnRspUserLogin 成功应推送 EVENT_MD_LOGIN"""
+        """OnRspUserLogin 成功应推送 EventType.MD_LOGIN"""
         engine = EventEngine()
         md_api = make_mock_md_api()
 
@@ -101,11 +101,11 @@ class TestMdGatewayCallbacks:
 
             spi = md_api.RegisterSpi.call_args[0][0]
             received = []
-            engine.register(EVENT_MD_LOGIN, lambda e: received.append(e))
+            engine.register(EventType.MD_LOGIN, lambda e: received.append(e))
 
             # 必须先让 OnFrontConnected 触发
             spi.OnFrontConnected()
-            engine.process_one()  # consume EVENT_MD_CONNECTED
+            engine.process_one()  # consume EventType.MD_CONNECTED
 
             rsp = MagicMock()
             rsp.CZCETime = "10:30:00"
@@ -123,7 +123,7 @@ class TestMdGatewayCallbacks:
 
             assert gw.status == "logined"
             assert len(received) == 1
-            assert received[0].type == EVENT_MD_LOGIN
+            assert received[0].type == EventType.MD_LOGIN
             assert received[0].data["error_id"] == 0
             assert received[0].data["trading_day"] == "20260426"
 
@@ -151,7 +151,7 @@ class TestMdGatewayCallbacks:
             assert gw.status == "connected"
 
     def test_on_rtn_depth_market_data_puts_tick_event(self):
-        """OnRtnDepthMarketData 应推送 EVENT_TICK"""
+        """OnRtnDepthMarketData 应推送 EventType.TICK"""
         engine = EventEngine()
         md_api = make_mock_md_api()
 
@@ -160,9 +160,9 @@ class TestMdGatewayCallbacks:
             from trader.gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
             spi = self._connect_and_connected(gw, md_api)
-            engine.process_one()  # consume EVENT_MD_CONNECTED
+            engine.process_one()  # consume EventType.MD_CONNECTED
             received = []
-            engine.register(EVENT_TICK, lambda e: received.append(e))
+            engine.register(EventType.TICK, lambda e: received.append(e))
 
             tick = MagicMock()
             tick.InstrumentID = "rb2501"
@@ -186,7 +186,7 @@ class TestMdGatewayCallbacks:
             engine.process_one()
 
             assert len(received) == 1
-            assert received[0].type == EVENT_TICK
+            assert received[0].type == EventType.TICK
             assert received[0].data["instrument_id"] == "rb2501"
             assert received[0].data["last_price"] == 3500.0
             assert received[0].data["volume"] == 1000
@@ -196,7 +196,7 @@ class TestMdGatewayCallbacks:
     # _connect_and_connected is defined above — single copy
 
     def test_on_front_disconnected_puts_event(self):
-        """OnFrontDisconnected 应推送 EVENT_MD_DISCONNECTED"""
+        """OnFrontDisconnected 应推送 EventType.MD_DISCONNECTED"""
         engine = EventEngine()
         md_api = make_mock_md_api()
 
@@ -205,9 +205,9 @@ class TestMdGatewayCallbacks:
             from trader.gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
             spi = self._connect_and_connected(gw, md_api)
-            engine.process_one()  # consume EVENT_MD_CONNECTED
+            engine.process_one()  # consume EventType.MD_CONNECTED
             received = []
-            engine.register(EVENT_MD_DISCONNECTED, lambda e: received.append(e))
+            engine.register(EventType.MD_DISCONNECTED, lambda e: received.append(e))
 
             spi.OnFrontDisconnected(100)
             engine.process_one()
