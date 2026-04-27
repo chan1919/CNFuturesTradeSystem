@@ -1,9 +1,5 @@
 from trader.gateway.base import BaseGateway, GatewayStatus
-from trader.event import (
-    Event,
-    EVENT_TD_CONNECTED, EVENT_TD_DISCONNECTED, EVENT_TD_LOGIN,
-    EVENT_ORDER, EVENT_TRADE, EVENT_POSITION, EVENT_ACCOUNT,
-)
+from trader.event import Event, EventType
 from openctp_ctp import tdapi
 
 
@@ -143,12 +139,12 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
 
     def OnFrontConnected(self):
         self._gw.status = GatewayStatus.CONNECTED
-        self._ee.put(Event(EVENT_TD_CONNECTED))
+        self._ee.put(Event(EventType.TD_CONNECTED))
         self._gw.login()
 
     def OnFrontDisconnected(self, nReason):
         self._gw.status = GatewayStatus.DISCONNECTED
-        self._ee.put(Event(EVENT_TD_DISCONNECTED, data={"reason": nReason}))
+        self._ee.put(Event(EventType.TD_DISCONNECTED, data={"reason": nReason}))
 
     def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
         if pRspInfo.ErrorID == 0:
@@ -157,7 +153,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             self._gw.session_id = pRspUserLogin.SessionID
             if pRspUserLogin.MaxOrderRef:
                 self._gw._order_ref = int(pRspUserLogin.MaxOrderRef)
-        self._ee.put(Event(EVENT_TD_LOGIN, data={
+        self._ee.put(Event(EventType.TD_LOGIN, data={
             "error_id": pRspInfo.ErrorID,
             "error_msg": pRspInfo.ErrorMsg,
             "trading_day": pRspUserLogin.TradingDay,
@@ -166,7 +162,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
         }))
 
     def OnRtnOrder(self, pOrder):
-        self._ee.put(Event(EVENT_ORDER, data={
+        self._ee.put(Event(EventType.ORDER, data={
             "instrument_id": pOrder.InstrumentID,
             "order_ref": pOrder.OrderRef,
             "order_sys_id": pOrder.OrderSysID,
@@ -186,7 +182,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
         }))
 
     def OnRtnTrade(self, pTrade):
-        self._ee.put(Event(EVENT_TRADE, data={
+        self._ee.put(Event(EventType.TRADE, data={
             "instrument_id": pTrade.InstrumentID,
             "trade_id": pTrade.TradeID,
             "order_ref": pTrade.OrderRef,
@@ -201,7 +197,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
 
     def OnRspQryInvestorPosition(self, pInvestorPosition, pRspInfo, nRequestID, bIsLast):
         if pRspInfo.ErrorID == 0:
-            self._ee.put(Event(EVENT_POSITION, data={
+            self._ee.put(Event(EventType.POSITION, data={
                 "instrument_id": pInvestorPosition.InstrumentID,
                 "posi_direction": pInvestorPosition.PosiDirection,
                 "position_date": pInvestorPosition.PositionDate,
@@ -214,7 +210,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
 
     def OnRspQryTradingAccount(self, pTradingAccount, pRspInfo, nRequestID, bIsLast):
         if pRspInfo.ErrorID == 0:
-            self._ee.put(Event(EVENT_ACCOUNT, data={
+            self._ee.put(Event(EventType.ACCOUNT, data={
                 "account_id": pTradingAccount.AccountID,
                 "pre_balance": pTradingAccount.PreBalance,
                 "balance": pTradingAccount.Balance,

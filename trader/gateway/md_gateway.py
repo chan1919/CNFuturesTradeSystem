@@ -1,5 +1,5 @@
 from trader.gateway.base import BaseGateway, GatewayStatus
-from trader.event import Event, EVENT_MD_CONNECTED, EVENT_MD_DISCONNECTED, EVENT_MD_LOGIN, EVENT_TICK
+from trader.event import Event, EventType
 from openctp_ctp import mdapi
 
 
@@ -56,17 +56,17 @@ class _MdSpiProxy(mdapi.CThostFtdcMdSpi):
 
     def OnFrontConnected(self):
         self._gw.status = GatewayStatus.CONNECTED
-        self._ee.put(Event(EVENT_MD_CONNECTED))
+        self._ee.put(Event(EventType.MD_CONNECTED))
         self._gw.login()
 
     def OnFrontDisconnected(self, nReason):
         self._gw.status = GatewayStatus.DISCONNECTED
-        self._ee.put(Event(EVENT_MD_DISCONNECTED, data={"reason": nReason}))
+        self._ee.put(Event(EventType.MD_DISCONNECTED, data={"reason": nReason}))
 
     def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
         if pRspInfo.ErrorID == 0:
             self._gw.status = GatewayStatus.LOGINED
-        self._ee.put(Event(EVENT_MD_LOGIN, data={
+        self._ee.put(Event(EventType.MD_LOGIN, data={
             "error_id": pRspInfo.ErrorID,
             "error_msg": pRspInfo.ErrorMsg,
             "trading_day": self._api.GetTradingDay(),
@@ -74,7 +74,7 @@ class _MdSpiProxy(mdapi.CThostFtdcMdSpi):
         }))
 
     def OnRtnDepthMarketData(self, pDepthMarketData):
-        self._ee.put(Event(EVENT_TICK, data={
+        self._ee.put(Event(EventType.TICK, data={
             "instrument_id": pDepthMarketData.InstrumentID,
             "exchange_id": pDepthMarketData.ExchangeID,
             "last_price": pDepthMarketData.LastPrice,
