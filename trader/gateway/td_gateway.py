@@ -1,6 +1,7 @@
 from trader.gateway.base import BaseGateway, GatewayStatus
 from trader.event import Event, EventType
 from openctp_ctp import tdapi
+from pathlib import Path
 
 
 # 方向/开平常量映射
@@ -15,13 +16,16 @@ PRICE_TYPE_LIMIT = "2"
 
 
 class TdGateway(BaseGateway):
-    def __init__(self, event_engine, front_url="", broker_id="", user_id="", password=""):
+    def __init__(self, event_engine, front_url="", broker_id="", user_id="", password="",
+                 app_id="", auth_code=""):
         super().__init__()
         self._event_engine = event_engine
         self._front_url = front_url
         self._broker_id = broker_id
         self._user_id = user_id
         self._password = password
+        self._app_id = app_id
+        self._auth_code = auth_code
         self._api = None
         self._spi = None
         self.front_id = 0
@@ -33,7 +37,9 @@ class TdGateway(BaseGateway):
         if front_url:
             self._front_url = front_url
         self.status = GatewayStatus.CONNECTING
-        self._api = tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi()
+        flow_dir = Path(__file__).resolve().parent.parent.parent / "flow"
+        flow_dir.mkdir(parents=True, exist_ok=True)
+        self._api = tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi(f"{flow_dir}/")
         self._spi = _TdSpiProxy(self._api, self._event_engine, self)
         self._api.RegisterSpi(self._spi)
         self._api.RegisterFront(self._front_url)
@@ -49,6 +55,17 @@ class TdGateway(BaseGateway):
         req.UserID = self._user_id
         req.Password = self._password
         self._api.ReqUserLogin(req, 0)
+
+    def authenticate(self):
+        if not (self._broker_id and self._user_id and self._auth_code and self._app_id):
+            return False
+        req = tdapi.CThostFtdcReqAuthenticateField()
+        req.BrokerID = self._broker_id
+        req.UserID = self._user_id
+        req.AppID = self._app_id
+        req.AuthCode = self._auth_code
+        self._api.ReqAuthenticate(req, 0)
+        return True
 
     def _next_order_ref(self):
         self._order_ref += 1
@@ -140,26 +157,41 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
     def OnFrontConnected(self):
         self._gw.status = GatewayStatus.CONNECTED
         self._ee.put(Event(EventType.TD_CONNECTED))
-        self._gw.login()
+        if not self._gw.authenticate():
+            self._gw.login()
 
     def OnFrontDisconnected(self, nReason):
         self._gw.status = GatewayStatus.DISCONNECTED
         self._ee.put(Event(EventType.TD_DISCONNECTED, data={"reason": nReason}))
 
     def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
-        if pRspInfo.ErrorID == 0:
+        if pRspInfo and pRspInfo.ErrorID == 0:
             self._gw.status = GatewayStatus.LOGINED
             self._gw.front_id = pRspUserLogin.FrontID
             self._gw.session_id = pRspUserLogin.SessionID
             if pRspUserLogin.MaxOrderRef:
                 self._gw._order_ref = int(pRspUserLogin.MaxOrderRef)
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
         self._ee.put(Event(EventType.TD_LOGIN, data={
-            "error_id": pRspInfo.ErrorID,
-            "error_msg": pRspInfo.ErrorMsg,
+            "error_id": error_id,
+            "error_msg": error_msg,
             "trading_day": pRspUserLogin.TradingDay,
             "front_id": pRspUserLogin.FrontID,
             "session_id": pRspUserLogin.SessionID,
         }))
+
+    def OnRspAuthenticate(self, pRspAuthenticate, pRspInfo, nRequestID, bIsLast):
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        self._ee.put(Event(EventType.TD_AUTHENTICATE, data={
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "user_id": pRspAuthenticate.UserID,
+            "app_id": pRspAuthenticate.AppID,
+        }))
+        if error_id == 0:
+            self._gw.login()
 
     def OnRtnOrder(self, pOrder):
         self._ee.put(Event(EventType.ORDER, data={
@@ -196,7 +228,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
         }))
 
     def OnRspQryInvestorPosition(self, pInvestorPosition, pRspInfo, nRequestID, bIsLast):
-        if pRspInfo.ErrorID == 0:
+        if pInvestorPosition:
             self._ee.put(Event(EventType.POSITION, data={
                 "instrument_id": pInvestorPosition.InstrumentID,
                 "posi_direction": pInvestorPosition.PosiDirection,
@@ -209,7 +241,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             }))
 
     def OnRspQryTradingAccount(self, pTradingAccount, pRspInfo, nRequestID, bIsLast):
-        if pRspInfo.ErrorID == 0:
+        if pTradingAccount:
             self._ee.put(Event(EventType.ACCOUNT, data={
                 "account_id": pTradingAccount.AccountID,
                 "pre_balance": pTradingAccount.PreBalance,
