@@ -10,6 +10,7 @@ from trader.engine import EventEngine
 from trader.event import EventType
 from trader.gateway.md_gateway import MdGateway
 from trader.gateway.td_gateway import TdGateway
+from trader.logger import LogHandler
 
 load_dotenv(".env.local")
 
@@ -57,6 +58,7 @@ class TestLiveTrade:
     def setup(self):
         self.cfg = get_config()
         self.engine = EventEngine()
+        self.logger = LogHandler(self.engine)
         self.md_gw = MdGateway(
             self.engine,
             front_url=self.cfg["md_front"],
@@ -242,15 +244,83 @@ class TestLiveTrade:
 
     def test_06_settlement_confirm(self):
         self._connect_td()
+
+        settlement_info = EventCollector(self.engine, EventType.SETTLEMENT_INFO)
+        settlement_confirm = EventCollector(self.engine, EventType.SETTLEMENT_INFO_CONFIRMED)
+
+        print("\n[结算单查询] 发送 QrySettlementInfo...")
+        self.td_gw.qry_settlement_info()
+
+        info_event = settlement_info.wait(self.engine, timeout=15)
+        d = info_event.data
+        print(f"  error_id={d['error_id']}, error_msg={d.get('error_msg', '')}")
+        if d["error_id"] == 0:
+            content = d.get("content", "")
+            print(f"  结算单内容({len(content)}字符), trading_day={d.get('trading_day', '')}")
+            if content:
+                print(f"  前200字: {content[:200]}")
+
+        confirm_event = settlement_confirm.wait(self.engine, timeout=15)
+        d2 = confirm_event.data
+        print(f"\n[结算单确认] error_id={d2['error_id']}, error_msg={d2.get('error_msg', '')}")
+        assert d2["error_id"] == 0, \
+            f"结算单确认失败: {d2.get('error_msg', '')}"
+        print(f"  确认日期={d2.get('confirm_date', '')}, 确认时间={d2.get('confirm_time', '')}")
+        print(f"  FrontID={self.td_gw.front_id}, SessionID={self.td_gw.session_id}")
+
+    def test_07_cancel_order(self):
+        self._connect_td()
+        self._connect_md()
+
+        tick = EventCollector(self.engine, EventType.TICK)
+        self.md_gw.subscribe(INSTRUMENT)
+        tick.wait(self.engine, timeout=15)
+        low_price = round(tick.last.data["bid_price1"] * 0.5, 0)
+
+        orders = EventCollector(self.engine, EventType.ORDER)
+
+        print(f"\n[撤单测试] {INSTRUMENT} 低挂买开 1手 @ {low_price}")
+        order_ref = self.td_gw.send_order(
+            instrument_id=INSTRUMENT,
+            direction="buy",
+            offset_flag="open",
+            price=low_price,
+            volume=1,
+        )
+        print(f"  订单编号: {order_ref}")
+
         time.sleep(1)
         self._drain_events()
-        print("\n[OK] 交易接口连接正常, 可正常进行后续交易操作")
-        print(f"  FrontID={self.td_gw.front_id}, SessionID={self.td_gw.session_id}")
+
+        print(f"\n[撤单] 撤消订单 {order_ref}")
+        self.td_gw.cancel_order(
+            instrument_id=INSTRUMENT,
+            order_ref=order_ref,
+            front_id=self.td_gw.front_id,
+            session_id=self.td_gw.session_id,
+        )
+
+        time.sleep(3)
+        self._drain_events()
+
+        cancelled = [
+            e for e in orders.events
+            if e.data.get("order_ref") == order_ref
+        ]
+        assert cancelled, "未收到该订单的任何 ORDER 事件"
+
+        last_order = cancelled[-1].data
+        status = last_order.get("order_status", "")
+        print(f"  订单状态码: {status}")
+        print(f"  状态消息: {last_order.get('status_msg', '')}")
+
+        assert status in ("5",), f"预期撤单状态 '5', 实际 '{status}'"
 
     def teardown_method(self):
         self._cleanup_positions()
         self.md_gw.close()
         self.td_gw.close()
+        self.logger.close()
 
     def _cleanup_positions(self):
         if self.td_gw.status != "logined":

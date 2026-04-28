@@ -11,6 +11,7 @@ from trader.logger import LogHandler, LOG_DIR, LOG_EVENTS
 @pytest.fixture(autouse=True)
 def patch_log_dir(tmp_path):
     original = LogHandler.__init__
+    original_close = getattr(LogHandler, "close", None)
     def patched_init(self, event_engine, level=logging.INFO):
         self._ee = event_engine
         self._logger = logging.getLogger("CNFuturesTest")
@@ -47,9 +48,17 @@ def patch_log_dir(tmp_path):
 
         self._log_dir = tmp_path
 
+    def patched_close(self):
+        for et in LOG_EVENTS:
+            self._ee.unregister(et.value, self._on_event)
+        self._logger.handlers.clear()
+
     LogHandler.__init__ = patched_init
+    LogHandler.close = patched_close
     yield
     LogHandler.__init__ = original
+    if original_close is not None:
+        LogHandler.close = original_close
     logging.getLogger("CNFuturesTest").handlers.clear()
 
 
@@ -67,6 +76,14 @@ class TestLogHandlerInit:
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         assert (month_dir / f"trade_{date_str}.log").is_file()
         assert (month_dir / f"error_{date_str}.log").is_file()
+
+    def test_close_unregisters_event_handlers(self, patch_log_dir):
+        engine = EventEngine()
+        handler = LogHandler(engine)
+
+        assert len(engine._handlers[EventType.TD_LOGIN.value]) == 1
+        handler.close()
+        assert len(engine._handlers[EventType.TD_LOGIN.value]) == 0
 
 
 class TestLogHandlerLevelRouting:

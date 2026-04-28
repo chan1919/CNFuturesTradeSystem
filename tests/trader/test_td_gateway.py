@@ -47,6 +47,45 @@ class TestTdGatewayCallbacks:
         spi.OnFrontConnected()
         return spi
 
+    def test_on_front_connected_calls_authenticate_when_auth_config_present(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(
+                engine,
+                broker_id="9999",
+                user_id="test",
+                password="123",
+                app_id="simnow_client_test",
+                auth_code="auth-code",
+            )
+            gw.connect()
+
+            spi = td_api.RegisterSpi.call_args[0][0]
+            spi.OnFrontConnected()
+
+            td_api.ReqAuthenticate.assert_called_once()
+            td_api.ReqUserLogin.assert_not_called()
+
+    def test_on_front_connected_calls_login_when_auth_config_missing(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
+            gw.connect()
+
+            spi = td_api.RegisterSpi.call_args[0][0]
+            spi.OnFrontConnected()
+
+            td_api.ReqAuthenticate.assert_not_called()
+            td_api.ReqUserLogin.assert_called_once()
+
     def test_on_front_connected_puts_event(self):
         engine = EventEngine()
         td_api = make_mock_td_api()
@@ -104,6 +143,134 @@ class TestTdGatewayCallbacks:
             assert gw.session_id == 100
             assert len(received) == 1
             assert received[0].data["error_id"] == 0
+
+    def test_on_rsp_authenticate_success_puts_event_and_calls_login(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(
+                engine,
+                broker_id="9999",
+                user_id="test",
+                password="123",
+                app_id="simnow_client_test",
+                auth_code="auth-code",
+            )
+            gw.connect()
+
+            spi = td_api.RegisterSpi.call_args[0][0]
+            spi.OnFrontConnected()
+            engine.process_one()
+
+            received = []
+            engine.register(EventType.TD_AUTHENTICATE, lambda e: received.append(e))
+
+            rsp = MagicMock()
+            rsp.UserID = "test"
+            rsp.AppID = "simnow_client_test"
+
+            info = MagicMock()
+            info.ErrorID = 0
+            info.ErrorMsg = ""
+
+            spi.OnRspAuthenticate(rsp, info, 1, True)
+            engine.process_one()
+
+            assert len(received) == 1
+            assert received[0].data["error_id"] == 0
+            td_api.ReqUserLogin.assert_called_once()
+
+    def test_authenticate_timeout_puts_failure_event_and_falls_back_to_login(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(
+                engine,
+                broker_id="9999",
+                user_id="test",
+                password="123",
+                app_id="simnow_client_test",
+                auth_code="auth-code",
+            )
+            gw.connect()
+
+            received = []
+            engine.register(EventType.TD_AUTHENTICATE, lambda e: received.append(e))
+
+            spi = td_api.RegisterSpi.call_args[0][0]
+            spi.OnFrontConnected()
+            engine.process_one()
+
+            gw.check_timeouts(now=31.0)
+            engine.process_one()
+
+            assert len(received) == 1
+            assert received[0].data["error_id"] != 0
+            assert "timeout" in received[0].data["error_msg"].lower()
+            td_api.ReqUserLogin.assert_called_once()
+
+    def test_on_rsp_qry_settlement_info_puts_event_with_last_flag(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
+            gw.connect()
+
+            spi = td_api.RegisterSpi.call_args[0][0]
+            spi.OnFrontConnected()
+            engine.process_one()
+
+            rsp = MagicMock()
+            rsp.FrontID = 1
+            rsp.SessionID = 100
+            rsp.MaxOrderRef = "1"
+            rsp.TradingDay = "20260428"
+            spi.OnRspUserLogin(rsp, MagicMock(ErrorID=0, ErrorMsg=""), 1, True)
+            engine.process_one()
+
+            received = []
+            engine.register(EventType.SETTLEMENT_INFO, lambda e: received.append(e))
+
+            info = MagicMock()
+            info.ErrorID = 0
+            info.ErrorMsg = ""
+
+            settlement = MagicMock()
+            settlement.TradingDay = "20260428"
+            settlement.Content = "part-1"
+            settlement.SequenceNo = 1
+
+            spi.OnRspQrySettlementInfo(settlement, info, 1, True)
+            engine.process_one()
+
+            assert len(received) == 1
+            assert received[0].data["trading_day"] == "20260428"
+            assert received[0].data["content"] == "part-1"
+            assert received[0].data["is_last"] is True
+            td_api.ReqSettlementInfoConfirm.assert_called_once()
+
+    def test_connect_resets_settlement_confirmed_state(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
+            gw._settlement_confirmed = True
+
+            gw.connect()
+
+            assert gw._settlement_confirmed is False
 
     def test_on_rtn_order_puts_event(self):
         engine = EventEngine()
