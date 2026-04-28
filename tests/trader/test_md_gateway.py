@@ -239,7 +239,7 @@ class TestMdGatewaySubscribe:
             self._connect_and_connected(gw, md_api)
 
             gw.subscribe(["rb2501", "rb2510"])
-            md_api.SubscribeMarketData.assert_called_once_with(["rb2501", "rb2510"], 2)
+            md_api.SubscribeMarketData.assert_called_once_with([b"rb2501", b"rb2510"], 2)
 
     def test_subscribe_not_connected_raises(self):
         """未连接时 subscribe 应抛异常"""
@@ -266,7 +266,7 @@ class TestMdGatewaySubscribe:
             self._connect_and_connected(gw, md_api)
 
             gw.subscribe("rb2501")
-            md_api.SubscribeMarketData.assert_called_once_with(["rb2501"], 1)
+            md_api.SubscribeMarketData.assert_called_once_with([b"rb2501"], 1)
 
 
 class TestMdGatewayLogin:

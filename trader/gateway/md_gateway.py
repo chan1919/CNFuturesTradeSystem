@@ -1,6 +1,7 @@
 from trader.gateway.base import BaseGateway, GatewayStatus
 from trader.event import Event, EventType
 from openctp_ctp import mdapi
+from pathlib import Path
 
 
 class MdGateway(BaseGateway):
@@ -18,7 +19,9 @@ class MdGateway(BaseGateway):
         if front_url:
             self._front_url = front_url
         self.status = GatewayStatus.CONNECTING
-        self._api = mdapi.CThostFtdcMdApi.CreateFtdcMdApi()
+        flow_dir = Path(__file__).resolve().parent.parent.parent / "flow"
+        flow_dir.mkdir(parents=True, exist_ok=True)
+        self._api = mdapi.CThostFtdcMdApi.CreateFtdcMdApi(f"{flow_dir}/")
         self._spi = _MdSpiProxy(self._api, self._event_engine, self)
         self._api.RegisterSpi(self._spi)
         self._api.RegisterFront(self._front_url)
@@ -38,6 +41,7 @@ class MdGateway(BaseGateway):
             raise RuntimeError("MdGateway: not connected, cannot subscribe")
         if isinstance(instruments, str):
             instruments = [instruments]
+        instruments = [i.encode() if isinstance(i, str) else i for i in instruments]
         self._api.SubscribeMarketData(instruments, len(instruments))
 
     def close(self):
