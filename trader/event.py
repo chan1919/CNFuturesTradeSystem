@@ -16,6 +16,7 @@ class EventType(str, Enum):
     TD_CONNECTED = "td.connected"          # 交易服务器连接成功
     TD_DISCONNECTED = "td.disconnected"    # 交易服务器断开
     TD_LOGIN = "td.login"                  # 交易服务器登录完成
+    TD_AUTHENTICATE = "td.authenticate"    # 交易服务器认证结果
 
     # 业务数据事件（由服务器主动推送）
     TICK = "tick"                          # Tick 行情数据
