@@ -132,3 +132,4 @@ flow/
 # Logs — ignore generated log files, keep directory structure
 logs/*.log
 !logs/
+.env.local
