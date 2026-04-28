@@ -2,6 +2,13 @@ from trader.gateway.base import BaseGateway, GatewayStatus
 from trader.event import Event, EventType
 from openctp_ctp import mdapi
 from pathlib import Path
+import sys
+
+
+def _log_level_from_info(pRspInfo, default="info"):
+    if pRspInfo and pRspInfo.ErrorID != 0:
+        return "error"
+    return default
 
 
 class MdGateway(BaseGateway):
@@ -60,21 +67,28 @@ class _MdSpiProxy(mdapi.CThostFtdcMdSpi):
 
     def OnFrontConnected(self):
         self._gw.status = GatewayStatus.CONNECTED
-        self._ee.put(Event(EventType.MD_CONNECTED))
+        self._ee.put(Event(EventType.MD_CONNECTED, data={"log_level": "info"}))
         self._gw.login()
 
     def OnFrontDisconnected(self, nReason):
         self._gw.status = GatewayStatus.DISCONNECTED
-        self._ee.put(Event(EventType.MD_DISCONNECTED, data={"reason": nReason}))
+        self._ee.put(Event(EventType.MD_DISCONNECTED, data={
+            "reason": nReason,
+            "log_level": "warning",
+        }))
 
     def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
-        if pRspInfo.ErrorID == 0:
+        if pRspInfo and pRspInfo.ErrorID == 0:
             self._gw.status = GatewayStatus.LOGINED
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
         self._ee.put(Event(EventType.MD_LOGIN, data={
-            "error_id": pRspInfo.ErrorID,
-            "error_msg": pRspInfo.ErrorMsg,
+            "error_id": error_id,
+            "error_msg": error_msg,
             "trading_day": self._api.GetTradingDay(),
             "login_time": pRspUserLogin.LoginTime,
+            "log_level": log_level,
         }))
 
     def OnRtnDepthMarketData(self, pDepthMarketData):
@@ -98,7 +112,17 @@ class _MdSpiProxy(mdapi.CThostFtdcMdSpi):
             "update_millisec": pDepthMarketData.UpdateMillisec,
             "trading_day": pDepthMarketData.TradingDay,
             "action_day": pDepthMarketData.ActionDay,
+            "log_level": "debug",
         }))
 
     def OnRspError(self, pRspInfo, nRequestID, bIsLast):
-        pass
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        print(f"[CTP Error][Md] nRequestID={nRequestID}, ErrorID={error_id}, Msg={error_msg}", file=sys.stderr)
+        self._ee.put(Event(EventType.SYSTEM, data={
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "request_id": nRequestID,
+            "log_level": "error",
+            "source": "MdGateway.OnRspError",
+        }))

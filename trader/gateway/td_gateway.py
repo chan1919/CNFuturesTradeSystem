@@ -2,6 +2,7 @@ from trader.gateway.base import BaseGateway, GatewayStatus
 from trader.event import Event, EventType
 from openctp_ctp import tdapi
 from pathlib import Path
+import sys
 
 
 # 方向/开平常量映射
@@ -56,6 +57,7 @@ class TdGateway(BaseGateway):
         req.Password = self._password
         self._api.ReqUserLogin(req, 0)
 
+    # TODO: add auth timeout mechanism — authenticate() should handle timeout
     def authenticate(self):
         if not (self._broker_id and self._user_id and self._auth_code and self._app_id):
             return False
@@ -156,13 +158,16 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
 
     def OnFrontConnected(self):
         self._gw.status = GatewayStatus.CONNECTED
-        self._ee.put(Event(EventType.TD_CONNECTED))
+        self._ee.put(Event(EventType.TD_CONNECTED, data={"log_level": "info"}))
         if not self._gw.authenticate():
             self._gw.login()
 
     def OnFrontDisconnected(self, nReason):
         self._gw.status = GatewayStatus.DISCONNECTED
-        self._ee.put(Event(EventType.TD_DISCONNECTED, data={"reason": nReason}))
+        self._ee.put(Event(EventType.TD_DISCONNECTED, data={
+            "reason": nReason,
+            "log_level": "warning",
+        }))
 
     def OnRspUserLogin(self, pRspUserLogin, pRspInfo, nRequestID, bIsLast):
         if pRspInfo and pRspInfo.ErrorID == 0:
@@ -173,22 +178,27 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 self._gw._order_ref = int(pRspUserLogin.MaxOrderRef)
         error_id = pRspInfo.ErrorID if pRspInfo else -1
         error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
         self._ee.put(Event(EventType.TD_LOGIN, data={
             "error_id": error_id,
             "error_msg": error_msg,
             "trading_day": pRspUserLogin.TradingDay,
             "front_id": pRspUserLogin.FrontID,
             "session_id": pRspUserLogin.SessionID,
+            "log_level": log_level,
         }))
 
+    # TODO: add auth timeout mechanism — OnRspAuthenticate may never return
     def OnRspAuthenticate(self, pRspAuthenticate, pRspInfo, nRequestID, bIsLast):
         error_id = pRspInfo.ErrorID if pRspInfo else -1
         error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
         self._ee.put(Event(EventType.TD_AUTHENTICATE, data={
             "error_id": error_id,
             "error_msg": error_msg,
             "user_id": pRspAuthenticate.UserID,
             "app_id": pRspAuthenticate.AppID,
+            "log_level": log_level,
         }))
         if error_id == 0:
             self._gw.login()
@@ -211,6 +221,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "insert_time": pOrder.InsertTime,
             "cancel_time": pOrder.CancelTime,
             "status_msg": pOrder.StatusMsg,
+            "log_level": "info",
         }))
 
     def OnRtnTrade(self, pTrade):
@@ -225,6 +236,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "volume": pTrade.Volume,
             "trade_date": pTrade.TradeDate,
             "trade_time": pTrade.TradeTime,
+            "log_level": "info",
         }))
 
     def OnRspQryInvestorPosition(self, pInvestorPosition, pRspInfo, nRequestID, bIsLast):
@@ -238,6 +250,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 "position_profit": pInvestorPosition.PositionProfit,
                 "use_margin": pInvestorPosition.UseMargin,
                 "frozen": pInvestorPosition.LongFrozen if hasattr(pInvestorPosition, "LongFrozen") else 0,
+                "log_level": "info",
             }))
 
     def OnRspQryTradingAccount(self, pTradingAccount, pRspInfo, nRequestID, bIsLast):
@@ -252,7 +265,18 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 "frozen_cash": pTradingAccount.FrozenCash,
                 "position_profit": pTradingAccount.PositionProfit,
                 "commission": pTradingAccount.Commission,
+                "log_level": "info",
             }))
 
+    # TODO: add auth timeout mechanism — authenticate() should handle timeout
     def OnRspError(self, pRspInfo, nRequestID, bIsLast):
-        pass
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        print(f"[CTP Error][Td] nRequestID={nRequestID}, ErrorID={error_id}, Msg={error_msg}", file=sys.stderr)
+        self._ee.put(Event(EventType.SYSTEM, data={
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "request_id": nRequestID,
+            "log_level": "error",
+            "source": "TdGateway.OnRspError",
+        }))
