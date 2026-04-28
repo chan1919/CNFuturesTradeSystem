@@ -32,6 +32,10 @@ class EventType(str, Enum):
     QRV_ACCOUNT = "qry.account"            # 账户资金查询结果
     QRV_INSTRUMENT = "qry.instrument"      # 合约信息查询结果
 
+    # 结算单事件
+    SETTLEMENT_INFO = "settlement.info"             # 结算单信息
+    SETTLEMENT_INFO_CONFIRMED = "settlement.confirmed"  # 结算单确认结果
+
 
 class Event:
     def __init__(self, type: EventType, data: dict = None):

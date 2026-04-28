@@ -21,6 +21,8 @@ LOG_EVENTS = [
     EventType.ACCOUNT,
     EventType.TICK,
     EventType.SYSTEM,
+    EventType.SETTLEMENT_INFO,
+    EventType.SETTLEMENT_INFO_CONFIRMED,
 ]
 
 
@@ -60,6 +62,11 @@ class LogHandler:
 
         for et in LOG_EVENTS:
             self._ee.register(et.value, self._on_event)
+
+    def close(self):
+        for et in LOG_EVENTS:
+            self._ee.unregister(et.value, self._on_event)
+        self._logger.handlers.clear()
 
     def _on_event(self, event):
         msg = self._format(event)

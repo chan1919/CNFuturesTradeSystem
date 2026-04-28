@@ -3,6 +3,7 @@ from trader.event import Event, EventType
 from openctp_ctp import tdapi
 from pathlib import Path
 import sys
+import time
 
 
 # 方向/开平常量映射
@@ -33,11 +34,18 @@ class TdGateway(BaseGateway):
         self.session_id = 0
         self._order_ref = 0
         self._investor_id = ""
+        self._settlement_confirmed = False
+        self._auth_timeout_seconds = 30.0
+        self._auth_started_at = None
+        self._auth_pending = False
 
     def connect(self, front_url=None):
         if front_url:
             self._front_url = front_url
         self.status = GatewayStatus.CONNECTING
+        self._settlement_confirmed = False
+        self._auth_started_at = None
+        self._auth_pending = False
         flow_dir = Path(__file__).resolve().parent.parent.parent / "flow"
         flow_dir.mkdir(parents=True, exist_ok=True)
         self._api = tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi(f"{flow_dir}/")
@@ -61,12 +69,34 @@ class TdGateway(BaseGateway):
     def authenticate(self):
         if not (self._broker_id and self._user_id and self._auth_code and self._app_id):
             return False
+        self._auth_started_at = time.monotonic()
+        self._auth_pending = True
         req = tdapi.CThostFtdcReqAuthenticateField()
         req.BrokerID = self._broker_id
         req.UserID = self._user_id
         req.AppID = self._app_id
         req.AuthCode = self._auth_code
         self._api.ReqAuthenticate(req, 0)
+        return True
+
+    def check_timeouts(self, now=None):
+        if not self._auth_pending or self._auth_started_at is None:
+            return False
+
+        elapsed = (time.monotonic() - self._auth_started_at) if now is None else now
+        if elapsed < self._auth_timeout_seconds:
+            return False
+
+        self._auth_pending = False
+        self._auth_started_at = None
+        self._event_engine.put(Event(EventType.TD_AUTHENTICATE, data={
+            "error_id": -1,
+            "error_msg": "authenticate timeout",
+            "user_id": self._user_id,
+            "app_id": self._app_id,
+            "log_level": "error",
+        }))
+        self.login()
         return True
 
     def _next_order_ref(self):
@@ -126,6 +156,23 @@ class TdGateway(BaseGateway):
 
         self._api.ReqOrderAction(req, 0)
 
+    def qry_settlement_info(self, trading_day=""):
+        if self.status != GatewayStatus.LOGINED:
+            raise RuntimeError("TdGateway: not logined, cannot query settlement")
+        req = tdapi.CThostFtdcQrySettlementInfoField()
+        req.BrokerID = self._broker_id
+        req.InvestorID = self._investor_id or self._user_id
+        req.TradingDay = trading_day
+        self._api.ReqQrySettlementInfo(req, 0)
+
+    def settlement_info_confirm(self):
+        if self.status != GatewayStatus.LOGINED:
+            raise RuntimeError("TdGateway: not logined, cannot confirm settlement")
+        req = tdapi.CThostFtdcSettlementInfoConfirmField()
+        req.BrokerID = self._broker_id
+        req.InvestorID = self._investor_id or self._user_id
+        self._api.ReqSettlementInfoConfirm(req, 0)
+
     def query_positions(self):
         if self.status != GatewayStatus.LOGINED:
             raise RuntimeError("TdGateway: not logined, cannot query")
@@ -147,6 +194,9 @@ class TdGateway(BaseGateway):
             self._api.Release()
             self._api = None
         self.status = GatewayStatus.DISCONNECTED
+        self._settlement_confirmed = False
+        self._auth_started_at = None
+        self._auth_pending = False
 
 
 class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
@@ -190,14 +240,16 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
 
     # TODO: add auth timeout mechanism — OnRspAuthenticate may never return
     def OnRspAuthenticate(self, pRspAuthenticate, pRspInfo, nRequestID, bIsLast):
+        self._gw._auth_pending = False
+        self._gw._auth_started_at = None
         error_id = pRspInfo.ErrorID if pRspInfo else -1
         error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
         log_level = "info" if error_id == 0 else "error"
         self._ee.put(Event(EventType.TD_AUTHENTICATE, data={
             "error_id": error_id,
             "error_msg": error_msg,
-            "user_id": pRspAuthenticate.UserID,
-            "app_id": pRspAuthenticate.AppID,
+            "user_id": pRspAuthenticate.UserID if pRspAuthenticate else self._gw._user_id,
+            "app_id": pRspAuthenticate.AppID if pRspAuthenticate else self._gw._app_id,
             "log_level": log_level,
         }))
         if error_id == 0:
@@ -267,6 +319,46 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 "commission": pTradingAccount.Commission,
                 "log_level": "info",
             }))
+
+    def OnRspQrySettlementInfo(self, pSettlementInfo, pRspInfo, nRequestID, bIsLast):
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
+        data = {
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "log_level": log_level,
+            "is_last": bIsLast,
+        }
+        if pSettlementInfo:
+            data.update({
+                "trading_day": pSettlementInfo.TradingDay,
+                "content": pSettlementInfo.Content,
+                "sequence_no": pSettlementInfo.SequenceNo,
+            })
+        self._ee.put(Event(EventType.SETTLEMENT_INFO, data=data))
+        if bIsLast and error_id == 0 and not getattr(self._gw, "_settlement_confirmed", False):
+            self._gw.settlement_info_confirm()
+
+    def OnRspSettlementInfoConfirm(self, pSettlementInfoConfirm, pRspInfo, nRequestID, bIsLast):
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
+        data = {
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "log_level": log_level,
+            "is_last": bIsLast,
+        }
+        if pSettlementInfoConfirm:
+            data.update({
+                "trading_day": pSettlementInfoConfirm.TradingDay,
+                "confirm_time": pSettlementInfoConfirm.ConfirmTime,
+                "confirm_date": pSettlementInfoConfirm.ConfirmDate,
+            })
+            if error_id == 0:
+                self._gw._settlement_confirmed = True
+        self._ee.put(Event(EventType.SETTLEMENT_INFO_CONFIRMED, data=data))
 
     # TODO: add auth timeout mechanism — authenticate() should handle timeout
     def OnRspError(self, pRspInfo, nRequestID, bIsLast):
