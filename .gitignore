@@ -126,8 +126,12 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+# CTP flow files
+flow/
+
 # Environments
 .env
+.env.local
 .envrc
 .venv
 env/
