@@ -215,6 +215,44 @@ class TestTdGatewayCallbacks:
             assert "timeout" in received[0].data["error_msg"].lower()
             td_api.ReqUserLogin.assert_called_once()
 
+    def test_late_authenticate_response_does_not_trigger_second_login(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(
+                engine,
+                broker_id="9999",
+                user_id="test",
+                password="123",
+                app_id="simnow_client_test",
+                auth_code="auth-code",
+            )
+            gw.connect()
+
+            spi = td_api.RegisterSpi.call_args[0][0]
+            spi.OnFrontConnected()
+            engine.process_one()
+
+            gw.check_timeouts(elapsed=31.0)
+            engine.process_one()
+            assert td_api.ReqUserLogin.call_count == 1
+
+            rsp = MagicMock()
+            rsp.UserID = "test"
+            rsp.AppID = "simnow_client_test"
+
+            info = MagicMock()
+            info.ErrorID = 0
+            info.ErrorMsg = ""
+
+            spi.OnRspAuthenticate(rsp, info, 1, True)
+            engine.process_one()
+
+            assert td_api.ReqUserLogin.call_count == 1
+
     def test_on_rsp_qry_settlement_info_puts_event_with_last_flag(self):
         engine = EventEngine()
         td_api = make_mock_td_api()

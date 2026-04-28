@@ -6,7 +6,7 @@ import sys
 import time
 
 
-# ∑ΩœÚ/ø™∆Ω≥£¡ø”≥…‰
+# ÊñπÂêë/ÂºÄÂπ≥Â∏∏ÈáèÊò†Â∞Ñ
 DIRECTION_BUY = "0"
 DIRECTION_SELL = "1"
 OFFSET_OPEN = "0"
@@ -38,6 +38,7 @@ class TdGateway(BaseGateway):
         self._auth_timeout_seconds = 30.0
         self._auth_started_at = None
         self._auth_pending = False
+        self._auth_fallback_triggered = False
 
     def connect(self, front_url=None):
         if front_url:
@@ -46,6 +47,7 @@ class TdGateway(BaseGateway):
         self._settlement_confirmed = False
         self._auth_started_at = None
         self._auth_pending = False
+        self._auth_fallback_triggered = False
         flow_dir = Path(__file__).resolve().parent.parent.parent / "flow"
         flow_dir.mkdir(parents=True, exist_ok=True)
         self._api = tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi(f"{flow_dir}/")
@@ -65,12 +67,13 @@ class TdGateway(BaseGateway):
         req.Password = self._password
         self._api.ReqUserLogin(req, 0)
 
-    # TODO: add auth timeout mechanism °™ authenticate() should handle timeout
+    # TODO: add auth timeout mechanism ‚Äî authenticate() should handle timeout
     def authenticate(self):
         if not (self._broker_id and self._user_id and self._auth_code and self._app_id):
             return False
         self._auth_started_at = time.monotonic()
         self._auth_pending = True
+        self._auth_fallback_triggered = False
         req = tdapi.CThostFtdcReqAuthenticateField()
         req.BrokerID = self._broker_id
         req.UserID = self._user_id
@@ -89,6 +92,7 @@ class TdGateway(BaseGateway):
 
         self._auth_pending = False
         self._auth_started_at = None
+        self._auth_fallback_triggered = True
         self._event_engine.put(Event(EventType.TD_AUTHENTICATE, data={
             "error_id": -1,
             "error_msg": "authenticate timeout",
@@ -197,6 +201,7 @@ class TdGateway(BaseGateway):
         self._settlement_confirmed = False
         self._auth_started_at = None
         self._auth_pending = False
+        self._auth_fallback_triggered = False
 
 
 class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
@@ -238,7 +243,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "log_level": log_level,
         }))
 
-    # TODO: add auth timeout mechanism °™ OnRspAuthenticate may never return
+    # TODO: add auth timeout mechanism ‚Äî OnRspAuthenticate may never return
     def OnRspAuthenticate(self, pRspAuthenticate, pRspInfo, nRequestID, bIsLast):
         self._gw._auth_pending = False
         self._gw._auth_started_at = None
@@ -252,7 +257,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "app_id": pRspAuthenticate.AppID if pRspAuthenticate else self._gw._app_id,
             "log_level": log_level,
         }))
-        if error_id == 0:
+        if error_id == 0 and not self._gw._auth_fallback_triggered:
             self._gw.login()
 
     def OnRtnOrder(self, pOrder):
@@ -360,7 +365,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 self._gw._settlement_confirmed = True
         self._ee.put(Event(EventType.SETTLEMENT_INFO_CONFIRMED, data=data))
 
-    # TODO: add auth timeout mechanism °™ authenticate() should handle timeout
+    # TODO: add auth timeout mechanism ‚Äî authenticate() should handle timeout
     def OnRspError(self, pRspInfo, nRequestID, bIsLast):
         error_id = pRspInfo.ErrorID if pRspInfo else -1
         error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
