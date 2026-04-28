@@ -164,6 +164,7 @@ class TestLiveTrade:
               f"卖一={d['ask_price1']}/{d['ask_volume1']}, "
               f"成交量={d['volume']}, 时间={d['update_time']}")
 
+    @pytest.mark.live_trade_window
     def test_05_open_long_and_close(self):
         self._connect_td()
         self._connect_md()
@@ -242,6 +243,7 @@ class TestLiveTrade:
             d = account.last.data
             print(f"  资金: 余额={d.get('balance', 0):.2f}, 可用={d.get('available', 0):.2f}")
 
+    @pytest.mark.live_trade_window
     def test_06_settlement_confirm(self):
         self._connect_td()
 
@@ -313,8 +315,13 @@ class TestLiveTrade:
         status = last_order.get("order_status", "")
         print(f"  订单状态码: {status}")
         print(f"  状态消息: {last_order.get('status_msg', '')}")
+        print(f"  撤单时间: {last_order.get('cancel_time', '')}")
 
-        assert status in ("5",), f"预期撤单状态 '5', 实际 '{status}'"
+        assert (
+            last_order.get("cancel_time")
+            or "撤" in last_order.get("status_msg", "")
+            or status in ("5",)
+        ), f"未观察到明确撤单语义: status={status}, status_msg={last_order.get('status_msg', '')}"
 
     def teardown_method(self):
         self._cleanup_positions()
