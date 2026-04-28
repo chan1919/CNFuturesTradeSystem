@@ -10,6 +10,8 @@ class RuntimeGuard:
         self._td_gateway = td_gateway
         self._now_provider = now_provider or datetime.now
         self._stopped = False
+        self._connect_timeout_seconds = 30.0
+        self._last_connect_attempt = {}
 
     def stop(self):
         self._stopped = True
@@ -28,7 +30,19 @@ class RuntimeGuard:
                 continue
             if gateway.status == GatewayStatus.DISCONNECTED:
                 gateway.connect()
+                self._last_connect_attempt[gateway] = current
                 triggered = True
+                continue
+            if gateway.status == GatewayStatus.CONNECTING:
+                last_attempt = self._last_connect_attempt.get(gateway)
+                if last_attempt is None:
+                    self._last_connect_attempt[gateway] = current
+                    continue
+                elapsed = (current - last_attempt).total_seconds()
+                if elapsed >= self._connect_timeout_seconds:
+                    gateway.connect()
+                    self._last_connect_attempt[gateway] = current
+                    triggered = True
         return triggered
 
 
