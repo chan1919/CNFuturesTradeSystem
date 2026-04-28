@@ -207,7 +207,7 @@ class TestTdGatewayCallbacks:
             spi.OnFrontConnected()
             engine.process_one()
 
-            gw.check_timeouts(now=31.0)
+            gw.check_timeouts(elapsed=31.0)
             engine.process_one()
 
             assert len(received) == 1
@@ -271,6 +271,27 @@ class TestTdGatewayCallbacks:
             gw.connect()
 
             assert gw._settlement_confirmed is False
+
+    def test_on_front_disconnected_puts_event(self):
+        engine = EventEngine()
+        td_api = make_mock_td_api()
+
+        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from trader.gateway.td_gateway import TdGateway
+            gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
+            spi = self._connect_and_connected(gw, td_api)
+            engine.process_one()
+
+            received = []
+            engine.register(EventType.TD_DISCONNECTED, lambda e: received.append(e))
+
+            spi.OnFrontDisconnected(100)
+            engine.process_one()
+
+            assert gw.status == "disconnected"
+            assert len(received) == 1
+            assert received[0].data["reason"] == 100
 
     def test_on_rtn_order_puts_event(self):
         engine = EventEngine()
