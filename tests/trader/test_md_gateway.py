@@ -269,6 +269,7 @@ class TestMdGatewaySubscribe:
             md_api.SubscribeMarketData.assert_called_once_with([b"rb2501"], 1)
 
 
+
 class TestMdGatewayLogin:
     """测试登录自动行为"""
 

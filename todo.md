@@ -18,10 +18,10 @@
 
 ## Pending
 
-- [ ] LogHandler 集成到实盘测试入口（当前 gateway 已带 log_level，测试中未初始化 Logger）
-- [ ] 认证超时机制 — `authenticate()` 调用后如果 `OnRspAuthenticate` 永不返回，当前无超时回退
-- [ ] 结算单确认 — QrySettlementInfo + SettlementInfoConfirm 流程
-- [ ] Trader 撤单测试 — `cancel_order()` 实盘测试未覆盖
+- [x] LogHandler 集成到实盘测试入口（当前 gateway 已带 log_level，测试中未初始化 Logger）
+- [x] 认证超时机制 — `authenticate()` 调用后如果 `OnRspAuthenticate` 永不返回，自动回退到登录流程
+- [x] 结算单确认 — QrySettlementInfo + SettlementInfoConfirm 流程
+- [x] Trader 撤单测试 — `cancel_order()` 实盘测试已覆盖
 - [ ] 断线重连 — OnFrontDisconnected 后的自动重连逻辑
 - [ ] 策略 handler 层 — `trader/handler/` 目前为空
 - [ ] server 层 — `server/` 目前全为 stub
