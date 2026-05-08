@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 from trader.engine import EventEngine
 from trader.event import Event, EventType
 
+pytestmark = pytest.mark.gateway
+
 
 def make_mock_td_api():
     api = MagicMock()

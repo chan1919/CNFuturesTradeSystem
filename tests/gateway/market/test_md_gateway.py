@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 from trader.engine import EventEngine
 from trader.event import Event, EventType
 
+pytestmark = pytest.mark.gateway
+
 
 # ---- helpers ----
 

@@ -4,7 +4,7 @@ import os
 import time
 from dotenv import load_dotenv
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from trader.engine import EventEngine
 from trader.event import EventType
 from trader.gateway.td_gateway import TdGateway
