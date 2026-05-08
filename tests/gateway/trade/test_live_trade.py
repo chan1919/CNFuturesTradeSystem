@@ -1,5 +1,6 @@
 """实盘集成测试：完整测试 CTP 连接、认证、登录、行情订阅、下单、查持仓/资金等核心交易流程
-使用方式: pytest -m live -v -s
+使用方式: pytest -m "gateway and live" -v -s
+运行实盘交易窗口才能跑的下单: pytest -m "gateway and live_trade_window" -v -s
 """
 import os
 import time
@@ -53,6 +54,7 @@ class EventCollector:
 
 
 @pytest.mark.live
+@pytest.mark.gateway
 class TestLiveTrade:
     @pytest.fixture(autouse=True)
     def setup(self):
