@@ -6,8 +6,8 @@
 """
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
-from src.trader.engine import EventEngine
-from src.trader.event import Event, EventType
+from src.event_engine.event_engine import EventEngine
+from src.event_engine.event import Event, EventType
 
 pytestmark = pytest.mark.gateway
 
@@ -31,9 +31,9 @@ class TestMdGatewayConnect:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine, front_url="tcp://127.0.0.1:10100")
 
             gw.connect()
@@ -47,9 +47,9 @@ class TestMdGatewayConnect:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine, front_url="tcp://127.0.0.1:10100")
 
             gw.connect()
@@ -71,9 +71,9 @@ class TestMdGatewayCallbacks:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine, front_url="tcp://127.0.0.1:10100")
             gw.connect()
 
@@ -95,9 +95,9 @@ class TestMdGatewayCallbacks:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine, broker_id="9999", user_id="test", password="123")
             gw.connect()
 
@@ -134,9 +134,9 @@ class TestMdGatewayCallbacks:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine, broker_id="9999", user_id="test", password="123")
             gw.connect()
 
@@ -157,9 +157,9 @@ class TestMdGatewayCallbacks:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
             spi = self._connect_and_connected(gw, md_api)
             engine.process_one()  # consume EventType.MD_CONNECTED
@@ -202,9 +202,9 @@ class TestMdGatewayCallbacks:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
             spi = self._connect_and_connected(gw, md_api)
             engine.process_one()  # consume EventType.MD_CONNECTED
@@ -234,9 +234,9 @@ class TestMdGatewaySubscribe:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
             self._connect_and_connected(gw, md_api)
 
@@ -248,9 +248,9 @@ class TestMdGatewaySubscribe:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
 
             with pytest.raises(RuntimeError, match="not connected"):
@@ -261,9 +261,9 @@ class TestMdGatewaySubscribe:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine)
             self._connect_and_connected(gw, md_api)
 
@@ -280,9 +280,9 @@ class TestMdGatewayLogin:
         engine = EventEngine()
         md_api = make_mock_md_api()
 
-        with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+        with patch("gateway.md_gateway.mdapi") as mock_mdapi:
             mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-            from trader.gateway.md_gateway import MdGateway
+            from gateway.md_gateway import MdGateway
             gw = MdGateway(engine, broker_id="9999", user_id="test", password="123")
             gw.connect()
 

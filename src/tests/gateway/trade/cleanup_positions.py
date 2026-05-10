@@ -5,10 +5,10 @@ import time
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-from src.trader.engine import EventEngine
-from src.trader.event import EventType
-from src.trader.gateway.td_gateway import TdGateway
-from src.trader.gateway.md_gateway import MdGateway
+from src.event_engine.event_engine import EventEngine
+from src.event_engine.event import EventType
+from src.gateway.td_gateway import TdGateway
+from src.gateway.md_gateway import MdGateway
 
 
 def main():

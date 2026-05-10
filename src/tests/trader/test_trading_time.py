@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from src.trader.common.trading_time import in_connection_window, session_label
+from src.common.trading_time import in_connection_window, session_label
 
 
 class TestTradingTime:

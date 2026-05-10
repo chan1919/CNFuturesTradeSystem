@@ -3,8 +3,8 @@
 # import pytest
 # import time
 # import threading
-from src.trader.event import Event, EventType
-from src.trader.engine import EventEngine
+from src.event_engine.event import Event, EventType
+from src.event_engine.event_engine import EventEngine
 
 
 class TestEvent:

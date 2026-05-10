@@ -3,9 +3,9 @@ import re
 from datetime import datetime
 
 import pytest
-from src.trader.engine import EventEngine
-from src.trader.event import Event, EventType
-from src.trader.logger import LogHandler, LOG_DIR, LOG_EVENTS
+from src.event_engine.event_engine import EventEngine
+from src.event_engine.event import Event, EventType
+from src.event_engine.logger import LogHandler, LOG_DIR, LOG_EVENTS
 
 
 @pytest.fixture(autouse=True)
@@ -44,13 +44,13 @@ def patch_log_dir(tmp_path):
         self._logger.addHandler(ch)
 
         for et in LOG_EVENTS:
-            self._ee.register(et.value, self._on_event)
+            self._ee.register(et, self._on_event)
 
         self._log_dir = tmp_path
 
     def patched_close(self):
         for et in LOG_EVENTS:
-            self._ee.unregister(et.value, self._on_event)
+            self._ee.unregister(et, self._on_event)
         self._logger.handlers.clear()
 
     LogHandler.__init__ = patched_init
@@ -81,9 +81,9 @@ class TestLogHandlerInit:
         engine = EventEngine()
         handler = LogHandler(engine)
 
-        assert len(engine._handlers[EventType.TD_LOGIN.value]) == 1
+        assert len(engine._handlers[EventType.TD_LOGIN]) == 1
         handler.close()
-        assert len(engine._handlers[EventType.TD_LOGIN.value]) == 0
+        assert len(engine._handlers[EventType.TD_LOGIN]) == 0
 
 
 class TestLogHandlerLevelRouting:

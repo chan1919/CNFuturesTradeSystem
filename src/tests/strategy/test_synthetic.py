@@ -3,17 +3,13 @@ import pytest
 from unittest.mock import MagicMock
 
 from src.strategy.unit import AbstractUnit, RealUnit, SyntheticUnit
-from src.strategy.position import Position
+from src.common.position import Position
+from src.common.exchange import Exchange
+from src.common.contract import Contract
 
 
-class FakeContract:
-    def __init__(self, symbol, ctp_id):
-        self.symbol = symbol
-        self.ctp_id = ctp_id
-
-
-def make_contract(symbol):
-    return FakeContract(symbol=symbol, ctp_id=symbol.lower())
+def make_contract(symbol, exchange=Exchange.SHFE):
+    return Contract.from_ctp(symbol, exchange)
 
 
 class TestSyntheticUnitInit:
@@ -33,10 +29,10 @@ class TestSyntheticUnitInit:
         assert "rb2510*-1.0" in u.formula
 
     def test_init_formula_with_three_components(self):
-        comps = [make_contract("A"), make_contract("B"), make_contract("C")]
+        comps = [make_contract("rb2501"), make_contract("m2609", Exchange.DCE), make_contract("ta605", Exchange.CZCE)]
         weights = [0.5, 0.3, 0.2]
         u = SyntheticUnit("basket", comps, weights, {})
-        assert u.formula == "A*0.5 + B*0.3 + C*0.2"
+        assert u.formula == "rb2501*0.5 + m2609*0.3 + ta605*0.2"
 
     def test_init_has_empty_price_cache(self):
         comps = [make_contract("rb2501"), make_contract("rb2510")]
@@ -136,15 +132,15 @@ class TestSyntheticUnitOnTick:
         assert processed[2]["last_price"] == 3410.0
 
     def test_three_component_basket(self):
-        comps = [make_contract("A"), make_contract("B"), make_contract("C")]
+        comps = [make_contract("rb2501"), make_contract("m2609", Exchange.DCE), make_contract("ta605", Exchange.CZCE)]
         u = SyntheticUnit("basket", comps, [0.5, 0.3, 0.2], {})
         u.enable()
         processed = []
         u._process_tick = lambda t: processed.append(t)
 
-        u.on_tick({"instrument_id": "A", "last_price": 100.0})
-        u.on_tick({"instrument_id": "B", "last_price": 200.0})
-        u.on_tick({"instrument_id": "C", "last_price": 300.0})
+        u.on_tick({"instrument_id": "rb2501", "last_price": 100.0})
+        u.on_tick({"instrument_id": "m2609", "last_price": 200.0})
+        u.on_tick({"instrument_id": "ta605", "last_price": 300.0})
 
         assert len(processed) == 1
         assert processed[0]["synthetic_price"] == 100 * 0.5 + 200 * 0.3 + 300 * 0.2

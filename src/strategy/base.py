@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from src.strategy.unit import AbstractUnit, SyntheticUnit
-from src.strategy.position import Position
+from src.common.position import Position
 
 
 class StrategyStatus:

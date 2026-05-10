@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from src.main import RuntimeGuard
-from src.trader.gateway.base import GatewayStatus
+from src.gateway.base import GatewayStatus
 
 
 class DummyGateway:

@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from src.common.position import Position
+from src.common.contract import Contract
 
 
 class AbstractUnit(ABC):
@@ -7,16 +9,14 @@ class AbstractUnit(ABC):
         self.contract = contract
         self.params = dict(params)
         self.enabled = False
-        from src.strategy.position import Position
+
         self.position = Position(instrument_id=instrument_id)
 
     @abstractmethod
-    def subscribe_market(self, md_gateway):
-        ...
+    def subscribe_market(self, md_gateway): ...
 
     @abstractmethod
-    def on_tick(self, tick: dict):
-        ...
+    def on_tick(self, tick: dict): ...
 
     def enable(self):
         self.enabled = True
@@ -44,18 +44,17 @@ class AbstractUnit(ABC):
         pass
 
     @abstractmethod
-    def _process_tick(self, tick: dict):
-        ...
+    def _process_tick(self, tick: dict): ...
 
 
 class RealUnit(AbstractUnit):
     def subscribe_market(self, md_gateway):
-        md_gateway.subscribe(self.contract.ctp_id)
+        md_gateway.subscribe(self.contract.instrument_id)
 
     def on_tick(self, tick: dict):
         if not self.enabled:
             return
-        if tick.get("instrument_id") != self.contract.symbol:
+        if tick.get("instrument_id") != self.contract.instrument_id:
             return
         self._process_tick(tick)
 
@@ -67,7 +66,7 @@ class SyntheticUnit(AbstractUnit):
     def __init__(self, name: str, components: list, weights: list[float], params: dict):
         super().__init__(instrument_id=name, contract=None, params=params)
         self.formula = " + ".join(
-            f"{c.symbol}*{w}" for c, w in zip(components, weights)
+            f"{c.instrument_id}*{w}" for c, w in zip(components, weights)
         )
         self.components = components
         self.weights = weights
@@ -75,15 +74,15 @@ class SyntheticUnit(AbstractUnit):
 
     def subscribe_market(self, md_gateway):
         for comp in self.components:
-            md_gateway.subscribe(comp.ctp_id)
+            md_gateway.subscribe(comp.instrument_id)
 
     def on_tick(self, tick: dict):
         if not self.enabled:
             return
 
         for comp in self.components:
-            if tick.get("instrument_id") == comp.symbol:
-                self._price_cache[comp.symbol] = tick["last_price"]
+            if tick.get("instrument_id") == comp.instrument_id:
+                self._price_cache[comp.instrument_id] = tick["last_price"]
                 break
 
         if len(self._price_cache) == len(self.components):
@@ -95,7 +94,7 @@ class SyntheticUnit(AbstractUnit):
 
     def _compute_price(self) -> float:
         return sum(
-            w * self._price_cache[c.symbol]
+            w * self._price_cache[c.instrument_id]
             for w, c in zip(self.weights, self.components)
         )
 

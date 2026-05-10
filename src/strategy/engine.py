@@ -1,4 +1,4 @@
-from src.trader.event import EventType
+from src.event_engine.event import EventType
 from src.strategy.base import BaseStrategy, StrategyStatus
 
 

@@ -1,8 +1,8 @@
 """TDD: TdGateway 测试"""
 import pytest
 from unittest.mock import MagicMock, patch
-from src.trader.engine import EventEngine
-from src.trader.event import Event, EventType
+from src.event_engine.event_engine import EventEngine
+from src.event_engine.event import Event, EventType
 
 pytestmark = pytest.mark.gateway
 
@@ -18,9 +18,9 @@ class TestTdGatewayConnect:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
             gw.connect()
 
@@ -34,9 +34,9 @@ class TestTdGatewayConnect:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
             gw.connect()
             assert gw.status == "connecting"
@@ -53,9 +53,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(
                 engine,
                 broker_id="9999",
@@ -76,9 +76,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             gw.connect()
 
@@ -92,9 +92,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
             gw.connect()
 
@@ -113,9 +113,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             gw.connect()
 
@@ -150,9 +150,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(
                 engine,
                 broker_id="9999",
@@ -189,9 +189,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(
                 engine,
                 broker_id="9999",
@@ -221,9 +221,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(
                 engine,
                 broker_id="9999",
@@ -259,9 +259,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             gw.connect()
 
@@ -302,9 +302,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
             gw._settlement_confirmed = True
 
@@ -316,9 +316,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, front_url="tcp://127.0.0.1:10100")
             spi = self._connect_and_connected(gw, td_api)
             engine.process_one()
@@ -337,9 +337,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine)
             spi = self._connect_and_connected(gw, td_api)
             engine.process_one()
@@ -368,9 +368,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine)
             spi = self._connect_and_connected(gw, td_api)
             engine.process_one()
@@ -401,9 +401,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine)
             spi = self._connect_and_connected(gw, td_api)
             engine.process_one()
@@ -430,9 +430,9 @@ class TestTdGatewayCallbacks:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine)
             spi = self._connect_and_connected(gw, td_api)
             engine.process_one()
@@ -474,9 +474,9 @@ class TestTdGatewaySendOrder:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             self._connect_and_logined(gw, td_api)
             engine.process_one()  # consume EventType.TD_LOGIN
@@ -501,9 +501,9 @@ class TestTdGatewaySendOrder:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine)
 
             with pytest.raises(RuntimeError, match="not logined"):
@@ -513,9 +513,9 @@ class TestTdGatewaySendOrder:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             self._connect_and_logined(gw, td_api)
 
@@ -541,9 +541,9 @@ class TestTdGatewayCancelOrder:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             self._connect_and_logined(gw, td_api)
 
@@ -560,9 +560,9 @@ class TestTdGatewayCancelOrder:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine)
 
             with pytest.raises(RuntimeError, match="not logined"):
@@ -585,9 +585,9 @@ class TestTdGatewayQuery:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             self._connect_and_logined(gw, td_api)
 
@@ -598,9 +598,9 @@ class TestTdGatewayQuery:
         engine = EventEngine()
         td_api = make_mock_td_api()
 
-        with patch("trader.gateway.td_gateway.tdapi") as mock_tdapi:
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
             mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
-            from trader.gateway.td_gateway import TdGateway
+            from gateway.td_gateway import TdGateway
             gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
             self._connect_and_logined(gw, td_api)
 

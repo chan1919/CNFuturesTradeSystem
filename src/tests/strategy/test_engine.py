@@ -2,22 +2,12 @@
 import pytest
 from unittest.mock import MagicMock, call
 
-from src.trader.event import EventType
+from src.event_engine.event import EventType
 from src.strategy.engine import StrategyEngine
 from src.strategy.base import BaseStrategy, StrategyStatus
 from src.strategy.unit import RealUnit
-
-
-class FakeContract:
-    def __init__(self, symbol, ctp_id):
-        self.symbol = symbol
-        self.ctp_id = ctp_id
-        self.product_id = symbol[:2]
-
-
-def make_real_unit(inst_id):
-    c = FakeContract(symbol=inst_id, ctp_id=inst_id.lower())
-    return RealUnit(inst_id, c, {})
+from src.common.exchange import Exchange
+from src.common.contract import Contract
 
 
 class DummyStrategy(BaseStrategy):
@@ -41,6 +31,11 @@ class SpyStrategy(BaseStrategy):
     def on_stop(self):
         super().on_stop()
         self.stop_called = True
+
+
+def make_real_unit(inst_id):
+    c = Contract.from_ctp(inst_id, Exchange.SHFE)
+    return RealUnit(inst_id, c, {})
 
 
 @pytest.fixture

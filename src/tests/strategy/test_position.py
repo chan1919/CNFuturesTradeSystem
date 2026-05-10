@@ -1,6 +1,6 @@
 """Step 1: Position dataclass 测试"""
 import pytest
-from src.strategy.position import Position
+from src.common.position import Position
 
 
 class TestPositionDefaults:

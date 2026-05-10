@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from src.trader.common.trading_time import in_connection_window
-from src.trader.gateway.base import GatewayStatus
+from src.common.trading_time import in_connection_window
+from src.gateway.base import GatewayStatus
 
 
 class RuntimeGuard:

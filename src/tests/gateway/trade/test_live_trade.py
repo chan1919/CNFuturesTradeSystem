@@ -7,7 +7,7 @@ import time
 import pytest
 from dotenv import load_dotenv
 
-from src.trader.event import EventType
+from src.event_engine.event import EventType
 
 load_dotenv(".env.local")
 
@@ -54,11 +54,12 @@ class EventCollector:
 class TestLiveTrade:
     @pytest.fixture(autouse=True)
     def setup(self):
-        from src.trader.engine import EventEngine
-        from src.trader.event import EventType
-        from src.trader.gateway.md_gateway import MdGateway
-        from src.trader.gateway.td_gateway import TdGateway
-        from src.trader.logger import LogHandler
+        import importlib
+        from src.event_engine.event_engine import EventEngine
+        from src.event_engine.event import EventType
+        from src.gateway.md_gateway import MdGateway
+        from src.gateway.td_gateway import TdGateway
+        from src.event_engine.logger import LogHandler
         self.cfg = get_config()
         self.engine = EventEngine()
         self.logger = LogHandler(self.engine)

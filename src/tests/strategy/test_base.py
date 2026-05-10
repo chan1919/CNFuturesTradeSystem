@@ -4,18 +4,13 @@ from unittest.mock import MagicMock
 
 from src.strategy.base import BaseStrategy, StrategyStatus
 from src.strategy.unit import AbstractUnit, RealUnit
-from src.strategy.position import Position
+from src.common.position import Position
+from src.common.exchange import Exchange
+from src.common.contract import Contract
 
 
-class FakeContract:
-    def __init__(self, symbol, ctp_id):
-        self.symbol = symbol
-        self.ctp_id = ctp_id
-        self.product_id = symbol[:2]
-
-
-def make_contract(symbol):
-    return FakeContract(symbol=symbol, ctp_id=symbol.lower())
+def make_contract(symbol, exchange=Exchange.SHFE):
+    return Contract.from_ctp(symbol, exchange)
 
 
 def make_real_unit(inst_id, contract=None, params=None):
@@ -132,12 +127,9 @@ class TestStrategyPositionQuery:
 
     def test_get_positions_for_product(self):
         s = DummyStrategy("test_strat")
-        c1 = FakeContract("rb2501", "rb2501")
-        c1.product_id = "rb"
-        c2 = FakeContract("rb2510", "rb2510")
-        c2.product_id = "rb"
-        c3 = FakeContract("m2609", "m2609")
-        c3.product_id = "m"
+        c1 = make_contract("rb2501")
+        c2 = make_contract("rb2510")
+        c3 = make_contract("m2609", Exchange.DCE)
         s.add_unit(make_real_unit("rb2501", c1))
         s.add_unit(make_real_unit("rb2510", c2))
         s.add_unit(make_real_unit("m2609", c3))
@@ -233,7 +225,7 @@ class TestStrategySyntheticUnits:
         from src.strategy.unit import SyntheticUnit
         s = DummyStrategy("test_strat")
         s.add_unit(make_real_unit("rb2501"))
-        comps = [FakeContract("rb2501", "rb2501"), FakeContract("rb2510", "rb2510")]
+        comps = [make_contract("rb2501"), make_contract("rb2510")]
         s.add_unit(SyntheticUnit("spread", comps, [1.0, -1.0], {}))
         synthetics = s.list_synthetic_units()
         assert len(synthetics) == 1

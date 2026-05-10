@@ -77,7 +77,7 @@
 
 ### Gateway Layer
 
-`trader/gateway/` 只负责：
+`src/gateway/` 只负责：
 
 1. `connect()` / `close()` / `login()` / `authenticate()`
 2. `subscribe()` / `send_order()` / `cancel_order()` / `query_*`
@@ -99,7 +99,7 @@
 2. 在 `CONNECTING` 卡住超过超时时间后重试连接
 3. 在显式 `stop()` 后停止自动连接
 
-`main.py` 目标设计：
+`src/main.py` 目标设计：
 
 1. 创建 `EventEngine`、`MdGateway`、`TdGateway`
 2. 周期性检查当前时间是否处于连接窗口
