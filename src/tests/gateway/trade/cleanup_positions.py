@@ -2,25 +2,24 @@
 import sys
 import os
 import time
-from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from src.event_engine.event_engine import EventEngine
 from src.event_engine.event import EventType
 from src.gateway.td_gateway import TdGateway
 from src.gateway.md_gateway import MdGateway
+from src.common.config import USER_ID, PASSWORD, BROKER_ID, TD_FRONT, MD_FRONT, APP_ID, AUTH_CODE
 
 
 def main():
-    load_dotenv(".env.local")
     cfg = {
-        "user_id": os.environ["CTP_USER_ID"],
-        "password": os.environ["CTP_PASSWORD"],
-        "broker_id": os.environ["CTP_BROKER_ID"],
-        "td_front": os.environ["CTP_TD_FRONT"],
-        "md_front": os.environ["CTP_MD_FRONT"],
-        "app_id": os.environ["CTP_APP_ID"],
-        "auth_code": os.environ["CTP_AUTH_CODE"],
+        "user_id": USER_ID,
+        "password": PASSWORD,
+        "broker_id": BROKER_ID,
+        "td_front": TD_FRONT,
+        "md_front": MD_FRONT,
+        "app_id": APP_ID,
+        "auth_code": AUTH_CODE,
     }
 
     engine = EventEngine()

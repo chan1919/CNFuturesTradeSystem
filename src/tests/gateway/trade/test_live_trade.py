@@ -2,25 +2,22 @@
 使用方式: pytest -m "gateway and live" -v -s
 运行实盘交易窗口才能跑的下单: pytest -m "gateway and live_trade_window" -v -s
 """
-import os
 import time
 import pytest
-from dotenv import load_dotenv
 
 from src.event_engine.event import EventType
-
-load_dotenv(".env.local")
+from src.common.config import USER_ID, PASSWORD, BROKER_ID, TD_FRONT, MD_FRONT, APP_ID, AUTH_CODE, is_live_mode, is_test_mode
 
 
 def get_config():
     return {
-        "user_id": os.environ["CTP_USER_ID"],
-        "password": os.environ["CTP_PASSWORD"],
-        "broker_id": os.environ["CTP_BROKER_ID"],
-        "td_front": os.environ["CTP_TD_FRONT"],
-        "md_front": os.environ["CTP_MD_FRONT"],
-        "app_id": os.environ["CTP_APP_ID"],
-        "auth_code": os.environ["CTP_AUTH_CODE"],
+        "user_id": USER_ID,
+        "password": PASSWORD,
+        "broker_id": BROKER_ID,
+        "td_front": TD_FRONT,
+        "md_front": MD_FRONT,
+        "app_id": APP_ID,
+        "auth_code": AUTH_CODE,
     }
 
 
@@ -110,12 +107,17 @@ class TestLiveTrade:
         self.md_gw.connect()
         self.td_gw.connect()
 
-        td_auth.wait(self.engine, timeout=15)
+        if is_live_mode():
+            td_auth.wait(self.engine, timeout=15)
+            assert td_auth.last.data["error_id"] == 0, \
+                f"认证失败: {td_auth.last.data.get('error msg', '')}"
+
         td_login.wait(self.engine, timeout=15)
         md_login.wait(self.engine, timeout=15)
 
-        assert td_auth.last.data["error_id"] == 0, \
-            f"认证失败: {td_auth.last.data.get('error_msg', '')}"
+        if is_live_mode():
+            assert td_auth.last.data["error_id"] == 0, \
+                f"认证失败: {td_auth.last.data.get('error_msg', '')}"
         assert td_login.last.data["error_id"] == 0, \
             f"交易登录失败: {td_login.last.data.get('error_msg', '')}"
         assert md_login.last.data["error_id"] == 0, \
@@ -123,7 +125,7 @@ class TestLiveTrade:
         assert self.td_gw.status == "logined"
         assert self.md_gw.status == "logined"
 
-        print(f"\n[OK] 交易认证成功")
+        print(f"\n[OK] {'实盘' if is_live_mode() else 'TTS'} 模式")
         print(f"[OK] 交易登录成功, TradingDay={td_login.last.data.get('trading_day', '')}")
         print(f"[OK] 行情登录成功, TradingDay={md_login.last.data.get('trading_day', '')}")
 

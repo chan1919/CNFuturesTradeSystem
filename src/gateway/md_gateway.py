@@ -1,6 +1,6 @@
 from src.gateway.base import BaseGateway, GatewayStatus
 from src.event_engine.event import Event, EventType
-from openctp_ctp import mdapi
+from src.gateway._ctp_backend import mdapi
 from pathlib import Path
 import sys
 
