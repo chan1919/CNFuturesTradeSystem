@@ -15,9 +15,10 @@ live_trade_window  tests that place real orders (requires market open)
 `pytest` defaults to `-m "not gateway"` — gateway tests are skipped.
 
 ```powershell
-pytest -m gateway                              # all gateway tests
-pytest -m "gateway and not live"               # mock-only unit tests
-pytest -m "gateway and live_trade_window"      # real order placement
+python -m pytest src/tests              # all non-gateway tests (src/tests is default via pytest.ini)
+python -m pytest -m gateway             # all gateway tests
+python -m pytest -m "gateway and not live"  # mock-only unit tests
+python -m pytest -m "gateway and live_trade_window"  # real order placement
 ```
 
 ## Environment
@@ -40,19 +41,19 @@ python -m pytest
 
 ## Architecture
 
-Event-driven system. `EventEngine` (`trader/engine.py`) is the central publish/subscribe bus. Gateways (`trader/gateway/`) wrap CTP native libs and convert callbacks into `Event` objects pushed into the engine.
+Event-driven system. `EventEngine` (`src/event_engine/event_engine.py`) is the central publish/subscribe bus. Gateways (`src/gateway/`) wrap CTP native libs and convert callbacks into `Event` objects pushed into the engine.
 
 ## Mock pattern in tests
 
 Gateway unit tests mock the CTP DLL modules **before** importing the gateway class:
 
 ```python
-with patch("trader.gateway.md_gateway.mdapi") as mock_mdapi:
+with patch("gateway.md_gateway.mdapi") as mock_mdapi:
     mock_mdapi.CThostFtdcMdApi.CreateFtdcMdApi.return_value = md_api
-    from trader.gateway.md_gateway import MdGateway
+    from gateway.md_gateway import MdGateway
 ```
 
-Same pattern applies for `td_gateway` → patch `trader.gateway.td_gateway.tdapi`.
+Same pattern applies for `td_gateway` → patch `gateway.td_gateway.tdapi`.
 
 ## Test file layout
 
@@ -62,10 +63,8 @@ tests/
 ├── gateway/trade/test_td_gateway.py     # TdGateway unit tests (mock)
 ├── gateway/trade/test_live_trade.py     # Real CTP integration (live)
 ├── gateway/trade/cleanup_positions.py   # Standalone position-closing script
-├── trader/test_event_engine.py          # EventEngine unit tests
-├── trader/test_contract.py              # Contract codec tests
-├── trader/test_logger.py                # LogHandler tests
-├── trader/test_trading_time.py          # Trading time window tests
+├── strategy/test_*.py                   # Strategy module tests
+├── trader/test_*.py                     # Legacy test location
 └── test_main.py                         # RuntimeGuard tests
 ```
 

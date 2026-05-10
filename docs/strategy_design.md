@@ -62,7 +62,7 @@
 # strategy/unit.py
 
 from abc import ABC, abstractmethod
-from trader.common.contract import Contract
+from common.contract import Contract
 
 class AbstractUnit(ABC):
     """最小执行单元 - 抽象基类
@@ -130,12 +130,12 @@ class RealUnit(AbstractUnit):
     """真实合约执行单元（单个 CTP 合约）"""
 
     def subscribe_market(self, md_gateway):
-        md_gateway.subscribe(self.contract.ctp_id)
+        md_gateway.subscribe(self.contract.instrument_id)
 
     def on_tick(self, tick: dict):
         if not self.enabled:
             return
-        if tick.get("instrument_id") != self.contract.symbol:
+        if tick.get("instrument_id") != self.contract.instrument_id:
             return
         self._process_tick(tick)
 
@@ -158,7 +158,7 @@ class SyntheticUnit(AbstractUnit):
                  weights: list[float],
                  params: dict):
         super().__init__(instrument_id=name, contract=None, params=params)  # 合成合约无 Contract
-        self.formula = " + ".join(f"{c.symbol}*{w}" for c, w in zip(components, weights))
+        self.formula = " + ".join(f"{c.instrument_id}*{w}" for c, w in zip(components, weights))
         self.components = components
         self.weights = weights
         self._price_cache: dict[str, float] = {}
@@ -169,7 +169,7 @@ class SyntheticUnit(AbstractUnit):
 
     def subscribe_market(self, md_gateway):
         for comp in self.components:
-            md_gateway.subscribe(comp.ctp_id)
+            md_gateway.subscribe(comp.instrument_id)
 
     def on_tick(self, tick: dict):
         if not self.enabled:
@@ -177,8 +177,8 @@ class SyntheticUnit(AbstractUnit):
 
         # 更新价格缓存
         for comp in self.components:
-            if tick.get("instrument_id") == comp.symbol:
-                self._price_cache[comp.symbol] = tick["last_price"]
+            if tick.get("instrument_id") == comp.instrument_id:
+                self._price_cache[comp.instrument_id] = tick["last_price"]
                 break
 
         # 所有成分合约都有数据后计算合成价
@@ -189,7 +189,7 @@ class SyntheticUnit(AbstractUnit):
             self._process_tick(tick)
 
     def _compute_price(self) -> float:
-        return sum(w * self._price_cache[c.symbol]
+        return sum(w * self._price_cache[c.instrument_id]
                    for w, c in zip(self.weights, self.components))
 
     def clear_position(self):
@@ -206,7 +206,7 @@ class SyntheticUnit(AbstractUnit):
 ### 3.4 Position — 持仓
 
 ```python
-# strategy/position.py
+# common/position.py
 
 from dataclasses import dataclass, field
 
@@ -381,7 +381,7 @@ class BaseStrategy(ABC):
 ```python
 # strategy/engine.py
 
-from trader.event import EventType
+from event_engine.event import EventType
 
 class StrategyEngine:
     """策略引擎：管理所有策略实例，桥接 EventEngine 和 Gateway"""
@@ -534,12 +534,17 @@ MdGateway → EventEngine → StrategyEngine._on_tick
 ## 六、文件规划
 
 ```
+common/
+├── position.py       # Position dataclass
+├── contract.py       # Contract 合约模型
+├── exchange.py       # Exchange 枚举
+└── trading_time.py   # 交易时间窗口
+
 strategy/
 ├── __init__.py
 ├── base.py           # BaseStrategy ABC, StrategyStatus
 ├── engine.py         # StrategyEngine
 ├── unit.py           # AbstractUnit + RealUnit + SyntheticUnit
-├── position.py       # Position dataclass
 │
 │   # ===== 预留钩子（暂不实现） =====
 ├── bar.py            # Bar dataclass: OHLCV + from_tick() + update()
@@ -551,8 +556,11 @@ strategy/
 └── examples/         # 示例策略（后续实现）
     └── __init__.py
 
+event_engine/
+├── event.py          # Event + EventType
+└── event_engine.py   # EventEngine
+
 tests/strategy/
-├── __init__.py
 ├── test_unit.py
 ├── test_position.py
 ├── test_base.py

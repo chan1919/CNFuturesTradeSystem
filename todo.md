@@ -3,8 +3,8 @@
 ## Current Status
 
 - [x] 项目基础框架（EventEngine + MdGateway + TdGateway）
-- [x] EventType 事件枚举（涵盖连接、登录、行情、交易、查询、结算）
-- [x] 合约编码转换（CTP ↔ 标准格式，含 CZCE 3/4 位兼容）
+- [x] EventType 事件枚举（纯 Enum，涵盖连接、登录、行情、交易、查询、结算）
+- [x] Contract 合约模型（CTP 原生 instrument_id，无编码转换）
 - [x] TdGateway 认证支持（ReqAuthenticate，AppID 字段）
 - [x] MdGateway / TdGateway flow 文件统一存放 flow/ 目录
 - [x] 实盘集成测试 test_live_trade.py（连接、认证、登录、查资金、查持仓、订阅行情、开平仓）
