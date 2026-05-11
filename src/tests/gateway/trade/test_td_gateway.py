@@ -1,8 +1,8 @@
 """TDD: TdGateway 测试"""
 import pytest
 from unittest.mock import MagicMock, patch
-from src.event_engine.event_engine import EventEngine
-from src.event_engine.event import Event, EventType
+from src.event_bus.event_bus import EventBus
+from src.event_bus.event import Event, EventType
 
 pytestmark = pytest.mark.gateway
 
@@ -15,7 +15,7 @@ def make_mock_td_api():
 
 class TestTdGatewayConnect:
     def test_connect_calls_register_front_and_init(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -31,7 +31,7 @@ class TestTdGatewayConnect:
             td_api.Init.assert_called_once()
 
     def test_connect_changes_status(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -50,7 +50,7 @@ class TestTdGatewayCallbacks:
         return spi
 
     def test_on_front_connected_calls_authenticate_when_auth_config_present(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -73,7 +73,7 @@ class TestTdGatewayCallbacks:
             td_api.ReqUserLogin.assert_not_called()
 
     def test_on_front_connected_calls_login_when_auth_config_missing(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -89,7 +89,7 @@ class TestTdGatewayCallbacks:
             td_api.ReqUserLogin.assert_called_once()
 
     def test_on_front_connected_puts_event(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -110,7 +110,7 @@ class TestTdGatewayCallbacks:
             assert received[0].type == EventType.TD_CONNECTED
 
     def test_on_rsp_user_login_puts_event(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -147,7 +147,7 @@ class TestTdGatewayCallbacks:
             assert received[0].data["error_id"] == 0
 
     def test_on_rsp_authenticate_success_puts_event_and_calls_login(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -186,7 +186,7 @@ class TestTdGatewayCallbacks:
             td_api.ReqUserLogin.assert_called_once()
 
     def test_authenticate_timeout_puts_failure_event_and_falls_back_to_login(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -218,7 +218,7 @@ class TestTdGatewayCallbacks:
             td_api.ReqUserLogin.assert_called_once()
 
     def test_late_authenticate_response_does_not_trigger_second_login(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -256,7 +256,7 @@ class TestTdGatewayCallbacks:
             assert td_api.ReqUserLogin.call_count == 1
 
     def test_on_rsp_qry_settlement_info_puts_event_with_last_flag(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -299,7 +299,7 @@ class TestTdGatewayCallbacks:
             td_api.ReqSettlementInfoConfirm.assert_called_once()
 
     def test_connect_resets_settlement_confirmed_state(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -313,7 +313,7 @@ class TestTdGatewayCallbacks:
             assert gw._settlement_confirmed is False
 
     def test_on_front_disconnected_puts_event(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -334,7 +334,7 @@ class TestTdGatewayCallbacks:
             assert received[0].data["reason"] == 100
 
     def test_on_rtn_order_puts_event(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -365,7 +365,7 @@ class TestTdGatewayCallbacks:
             assert received[0].data["order_ref"] == "123"
 
     def test_on_rtn_trade_puts_event(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -398,7 +398,7 @@ class TestTdGatewayCallbacks:
             assert received[0].data["volume"] == 5
 
     def test_on_rsp_qry_investor_position(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -427,7 +427,7 @@ class TestTdGatewayCallbacks:
             assert received[0].data["instrument_id"] == "rb2501"
 
     def test_on_rsp_qry_trading_account(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -471,7 +471,7 @@ class TestTdGatewaySendOrder:
         return spi
 
     def test_send_order_calls_req_order_insert(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -498,7 +498,7 @@ class TestTdGatewaySendOrder:
             assert order_ref is not None
 
     def test_send_order_not_logined_raises(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -510,7 +510,7 @@ class TestTdGatewaySendOrder:
                 gw.send_order("rb2501", "buy", "open", 3500.0, 10)
 
     def test_send_order_increments_order_ref(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -538,7 +538,7 @@ class TestTdGatewayCancelOrder:
         return spi
 
     def test_cancel_order_calls_req_order_action(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -557,7 +557,7 @@ class TestTdGatewayCancelOrder:
             assert req.OrderSysID == "sys001"
 
     def test_cancel_order_not_logined_raises(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -582,7 +582,7 @@ class TestTdGatewayQuery:
         return spi
 
     def test_query_positions_calls_req_qry(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:
@@ -595,7 +595,7 @@ class TestTdGatewayQuery:
             td_api.ReqQryInvestorPosition.assert_called_once()
 
     def test_query_account_calls_req_qry(self):
-        engine = EventEngine()
+        engine = EventBus()
         td_api = make_mock_td_api()
 
         with patch("gateway.td_gateway.tdapi") as mock_tdapi:

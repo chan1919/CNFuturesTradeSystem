@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from src.strategy.base import BaseStrategy, StrategyStatus
-from src.strategy.unit import AbstractUnit, RealUnit
+from src.strategy.unit import AbstractUnit, RealUnit, SyntheticUnit
 from src.common.position import Position
 from src.common.exchange import Exchange
 from src.common.contract import Contract
@@ -222,7 +222,6 @@ class TestStrategyRouteTick:
 
 class TestStrategySyntheticUnits:
     def test_list_synthetic_units_filters_real_units(self):
-        from src.strategy.unit import SyntheticUnit
         s = DummyStrategy("test_strat")
         s.add_unit(make_real_unit("rb2501"))
         comps = [make_contract("rb2501"), make_contract("rb2510")]
@@ -230,6 +229,38 @@ class TestStrategySyntheticUnits:
         synthetics = s.list_synthetic_units()
         assert len(synthetics) == 1
         assert isinstance(synthetics[0], SyntheticUnit)
+
+    def test_route_tick_updates_synthetic_unit_from_component_ticks(self):
+        class CaptureStrategy(DummyStrategy):
+            def __init__(self, name):
+                super().__init__(name)
+                self.captured_ticks = []
+
+            def on_tick(self, tick, unit):
+                self.captured_ticks.append((tick, unit.instrument_id))
+
+        s = CaptureStrategy("test_strat")
+        comps = [make_contract("rb2501"), make_contract("rb2510")]
+        synthetic = SyntheticUnit("spread", comps, [1.0, -1.0], {})
+        synthetic.enable()
+        s.add_unit(synthetic)
+
+        first_event = MagicMock()
+        first_event.data = {"instrument_id": "rb2501", "last_price": 3500.0}
+        second_event = MagicMock()
+        second_event.data = {"instrument_id": "rb2510", "last_price": 3400.0}
+
+        s._route_tick(first_event)
+        assert s.captured_ticks == []
+
+        s._route_tick(second_event)
+        assert len(s.captured_ticks) == 1
+        tick, instrument_id = s.captured_ticks[0]
+        assert instrument_id == "spread"
+        assert tick["instrument_id"] == "spread"
+        assert tick["source_instrument_id"] == "rb2510"
+        assert tick["synthetic_price"] == 100.0
+        assert synthetic.position.last_price == 100.0
 
 
 class TestStrategyRoutePosition:

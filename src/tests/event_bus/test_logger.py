@@ -3,17 +3,17 @@ import re
 from datetime import datetime
 
 import pytest
-from src.event_engine.event_engine import EventEngine
-from src.event_engine.event import Event, EventType
-from src.event_engine.logger import LogHandler, LOG_DIR, LOG_EVENTS
+from src.event_bus.event_bus import EventBus
+from src.event_bus.event import Event, EventType
+from src.event_bus.logger import LogHandler, LOG_DIR, LOG_EVENTS
 
 
 @pytest.fixture(autouse=True)
 def patch_log_dir(tmp_path):
     original = LogHandler.__init__
     original_close = getattr(LogHandler, "close", None)
-    def patched_init(self, event_engine, level=logging.INFO):
-        self._ee = event_engine
+    def patched_init(self, event_bus, level=logging.INFO):
+        self._ee = event_bus
         self._logger = logging.getLogger("CNFuturesTest")
         self._logger.setLevel(level)
         self._logger.handlers.clear()
@@ -64,43 +64,43 @@ def patch_log_dir(tmp_path):
 
 class TestLogHandlerInit:
     def test_creates_month_subdirectory(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         assert month_dir.is_dir()
 
     def test_creates_dated_trade_file(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         assert (month_dir / f"trade_{date_str}.log").is_file()
         assert (month_dir / f"error_{date_str}.log").is_file()
 
     def test_close_unregisters_event_handlers(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
 
-        assert len(engine._handlers[EventType.TD_LOGIN]) == 1
+        assert len(event_bus._handlers[EventType.TD_LOGIN]) == 1
         handler.close()
-        assert len(engine._handlers[EventType.TD_LOGIN]) == 0
+        assert len(event_bus._handlers[EventType.TD_LOGIN]) == 0
 
 
 class TestLogHandlerLevelRouting:
     def test_info_event_writes_to_trade_file_not_error_file(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
         error_file = month_dir / f"error_{date_str}.log"
 
-        engine.put(Event(EventType.TD_LOGIN, data={
+        event_bus.put(Event(EventType.TD_LOGIN, data={
             "error_id": 0,
             "trading_day": "20260428",
             "log_level": "info",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         trade_content = trade_file.read_text(encoding="utf-8")
         assert "[td.login]" in trade_content
@@ -111,19 +111,19 @@ class TestLogHandlerLevelRouting:
         assert error_content.strip() == ""
 
     def test_error_event_writes_to_both_files(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
         error_file = month_dir / f"error_{date_str}.log"
 
-        engine.put(Event(EventType.TD_LOGIN, data={
+        event_bus.put(Event(EventType.TD_LOGIN, data={
             "error_id": 64,
             "error_msg": "客户未认证",
             "log_level": "error",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         trade_content = trade_file.read_text(encoding="utf-8")
         assert "[td.login]" in trade_content
@@ -134,18 +134,18 @@ class TestLogHandlerLevelRouting:
         assert "error_msg=客户未认证" in error_content
 
     def test_warning_event_writes_to_trade_not_error(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
         error_file = month_dir / f"error_{date_str}.log"
 
-        engine.put(Event(EventType.TD_DISCONNECTED, data={
+        event_bus.put(Event(EventType.TD_DISCONNECTED, data={
             "reason": 100,
             "log_level": "warning",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         trade_content = trade_file.read_text(encoding="utf-8")
         assert "[WARNING]" in trade_content
@@ -157,17 +157,17 @@ class TestLogHandlerLevelRouting:
 
 class TestLogHandlerDefaultLevel:
     def test_no_log_level_defaults_to_info(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
 
-        engine.put(Event(EventType.ORDER, data={
+        event_bus.put(Event(EventType.ORDER, data={
             "order_ref": "123",
             "instrument_id": "m2609",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         content = trade_file.read_text(encoding="utf-8")
         assert "[INFO]" in content or "[ORDER]" in content
@@ -175,17 +175,17 @@ class TestLogHandlerDefaultLevel:
 
 class TestLogHandlerFormat:
     def test_timestamp_and_level_in_output(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
 
-        engine.put(Event(EventType.MD_LOGIN, data={
+        event_bus.put(Event(EventType.MD_LOGIN, data={
             "trading_day": "20260428",
             "log_level": "info",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         content = trade_file.read_text(encoding="utf-8")
         assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", content)
@@ -195,16 +195,16 @@ class TestLogHandlerFormat:
 
 class TestLogHandlerNotRegistered:
     def test_unregistered_event_does_not_log(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
 
         before = trade_file.stat().st_mtime_ns
 
-        engine.put(Event(EventType.QRV_INSTRUMENT, data={"log_level": "info"}))
-        engine.process_one()
+        event_bus.put(Event(EventType.QRV_INSTRUMENT, data={"log_level": "info"}))
+        event_bus.process_one()
 
         after = trade_file.stat().st_mtime_ns
         assert after == before
@@ -212,35 +212,35 @@ class TestLogHandlerNotRegistered:
 
 class TestLogHandlerDebug:
     def test_debug_level_not_written_at_default(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
 
-        engine.put(Event(EventType.TICK, data={
+        event_bus.put(Event(EventType.TICK, data={
             "instrument_id": "m2609",
             "last_price": 2994.0,
             "log_level": "debug",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         content = trade_file.read_text(encoding="utf-8")
         assert "[DEBUG]" not in content
 
     def test_debug_level_written_when_level_set_to_debug(self, patch_log_dir):
-        engine = EventEngine()
-        handler = LogHandler(engine, level=logging.DEBUG)
+        event_bus = EventBus()
+        handler = LogHandler(event_bus, level=logging.DEBUG)
         date_str = datetime.now().strftime("%Y-%m-%d")
         month_dir = handler._log_dir / datetime.now().strftime("%Y-%m")
         trade_file = month_dir / f"trade_{date_str}.log"
 
-        engine.put(Event(EventType.TICK, data={
+        event_bus.put(Event(EventType.TICK, data={
             "instrument_id": "m2609",
             "last_price": 2994.0,
             "log_level": "debug",
         }))
-        engine.process_one()
+        event_bus.process_one()
 
         content = trade_file.read_text(encoding="utf-8")
         assert "[DEBUG]" in content

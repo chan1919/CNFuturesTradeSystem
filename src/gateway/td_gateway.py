@@ -1,6 +1,6 @@
 from src.gateway.base import BaseGateway, GatewayStatus
-from src.event_engine.event import Event, EventType
-from openctp_ctp import tdapi
+from src.event_bus.event import Event, EventType
+from src.gateway._ctp_backend import tdapi
 from pathlib import Path
 import sys
 import time
@@ -17,10 +17,10 @@ PRICE_TYPE_LIMIT = "2"
 
 
 class TdGateway(BaseGateway):
-    def __init__(self, event_engine, front_url="", broker_id="", user_id="", password="",
+    def __init__(self, event_bus, front_url="", broker_id="", user_id="", password="",
                  app_id="", auth_code=""):
         super().__init__()
-        self._event_engine = event_engine
+        self._event_bus = event_bus
         self._front_url = front_url
         self._broker_id = broker_id
         self._user_id = user_id
@@ -50,7 +50,7 @@ class TdGateway(BaseGateway):
         flow_dir = Path(__file__).resolve().parent.parent.parent / "flow"
         flow_dir.mkdir(parents=True, exist_ok=True)
         self._api = tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi(f"{flow_dir}/")
-        self._spi = _TdSpiProxy(self._api, self._event_engine, self)
+        self._spi = _TdSpiProxy(self._api, self._event_bus, self)
         self._api.RegisterSpi(self._spi)
         self._api.RegisterFront(self._front_url)
         self._api.SubscribePrivateTopic(tdapi.THOST_TERT_RESUME)
@@ -91,7 +91,7 @@ class TdGateway(BaseGateway):
         self._auth_pending = False
         self._auth_started_at = None
         self._auth_fallback_triggered = True
-        self._event_engine.put(Event(EventType.TD_AUTHENTICATE, data={
+        self._event_bus.put(Event(EventType.TD_AUTHENTICATE, data={
             "error_id": -1,
             "error_msg": "authenticate timeout",
             "user_id": self._user_id,
@@ -203,10 +203,10 @@ class TdGateway(BaseGateway):
 
 
 class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
-    def __init__(self, api, event_engine, gateway):
+    def __init__(self, api, event_bus, gateway):
         super().__init__()
         self._api = api
-        self._ee = event_engine
+        self._ee = event_bus
         self._gw = gateway
 
     def OnFrontConnected(self):
@@ -277,6 +277,21 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "status_msg": pOrder.StatusMsg,
             "log_level": "info",
         }))
+
+    def OnRspOrderInsert(self, pOrder, pRspInfo, nRequestID, bIsLast):
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
+        data = {
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "request_id": nRequestID,
+            "log_level": log_level,
+        }
+        if pOrder:
+            data["instrument_id"] = pOrder.InstrumentID
+            data["order_ref"] = pOrder.OrderRef
+        self._ee.put(Event(EventType.ORDER_INSERT, data=data))
 
     def OnRtnTrade(self, pTrade):
         self._ee.put(Event(EventType.TRADE, data={

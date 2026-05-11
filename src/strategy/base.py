@@ -11,21 +11,30 @@ class StrategyStatus:
 
 
 class BaseStrategy(ABC):
-    def __init__(self, name: str, engine=None):
+    def __init__(self, name: str, runtime=None):
         self.name = name
         self.status = StrategyStatus.STOPPED
-        self.engine = engine
+        self.runtime = runtime
         self.units: dict[str, AbstractUnit] = {}
         self._last_account: dict = {}
+        self._component_unit_map: dict[str, list[AbstractUnit]] = {}
 
     # ── 单元管理 ──
 
     def add_unit(self, unit: AbstractUnit):
         self.units[unit.instrument_id] = unit
+        for component_id in unit.component_instrument_ids():
+            self._component_unit_map.setdefault(component_id, []).append(unit)
 
     def remove_unit(self, instrument_id: str):
         unit = self.units.pop(instrument_id, None)
         if unit:
+            for component_id in unit.component_instrument_ids():
+                listeners = self._component_unit_map.get(component_id, [])
+                if unit in listeners:
+                    listeners.remove(unit)
+                if not listeners:
+                    self._component_unit_map.pop(component_id, None)
             unit.disable()
 
     def get_unit(self, instrument_id: str) -> AbstractUnit | None:
@@ -107,15 +116,28 @@ class BaseStrategy(ABC):
 
     def _route_tick(self, event):
         tick = event.data
-        unit = self.get_unit(tick.get("instrument_id", ""))
-        if unit is None:
-            return
-        if not unit.enabled:
-            return
-        if tick.get("last_price") is not None:
-            unit.position.last_price = tick["last_price"]
-        unit.on_tick(tick)
-        self.on_tick(tick, unit)
+        instrument_id = tick.get("instrument_id", "")
+        candidates: list[AbstractUnit] = []
+
+        direct_unit = self.get_unit(instrument_id)
+        if direct_unit is not None:
+            candidates.append(direct_unit)
+
+        for unit in self._component_unit_map.get(instrument_id, []):
+            if unit not in candidates:
+                candidates.append(unit)
+
+        for unit in candidates:
+            if not unit.enabled:
+                continue
+            if unit.contract is not None and tick.get("last_price") is not None:
+                unit.position.last_price = tick["last_price"]
+            routed_tick = unit.on_tick(tick)
+            if routed_tick is None:
+                continue
+            if routed_tick.get("last_price") is not None:
+                unit.position.last_price = routed_tick["last_price"]
+            self.on_tick(routed_tick, unit)
 
     def _route_position(self, event):
         data = event.data

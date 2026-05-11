@@ -1,6 +1,6 @@
 from src.gateway.base import BaseGateway, GatewayStatus
-from src.event_engine.event import Event, EventType
-from openctp_ctp import mdapi
+from src.event_bus.event import Event, EventType
+from src.gateway._ctp_backend import mdapi
 from pathlib import Path
 import sys
 
@@ -12,9 +12,9 @@ def _log_level_from_info(pRspInfo, default="info"):
 
 
 class MdGateway(BaseGateway):
-    def __init__(self, event_engine, front_url="", broker_id="", user_id="", password=""):
+    def __init__(self, event_bus, front_url="", broker_id="", user_id="", password=""):
         super().__init__()
-        self._event_engine = event_engine
+        self._event_bus = event_bus
         self._front_url = front_url
         self._broker_id = broker_id
         self._user_id = user_id
@@ -29,7 +29,7 @@ class MdGateway(BaseGateway):
         flow_dir = Path(__file__).resolve().parent.parent.parent / "flow"
         flow_dir.mkdir(parents=True, exist_ok=True)
         self._api = mdapi.CThostFtdcMdApi.CreateFtdcMdApi(f"{flow_dir}/")
-        self._spi = _MdSpiProxy(self._api, self._event_engine, self)
+        self._spi = _MdSpiProxy(self._api, self._event_bus, self)
         self._api.RegisterSpi(self._spi)
         self._api.RegisterFront(self._front_url)
         self._api.Init()
@@ -59,10 +59,10 @@ class MdGateway(BaseGateway):
 
 
 class _MdSpiProxy(mdapi.CThostFtdcMdSpi):
-    def __init__(self, api, event_engine, gateway):
+    def __init__(self, api, event_bus, gateway):
         super().__init__()
         self._api = api
-        self._ee = event_engine
+        self._ee = event_bus
         self._gw = gateway
 
     def OnFrontConnected(self):

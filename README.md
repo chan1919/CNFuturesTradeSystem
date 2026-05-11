@@ -1,131 +1,180 @@
 # CNFuturesTradeSystem
 
-期货内盘量化交易系统，基于 [openctp-ctp](https://github.com/openctp/openctp) 的事件驱动架构。
+事件驱动的国内期货量化交易系统。
 
-> **分支说明：** `main` 为稳定分支（核心交易框架），`dev` 为策略引擎开发分支。本文档标注了 dev 分支的增量开发规划。
+当前阶段默认使用 `TTS` 作为测试交易后端，`CTP` 作为最终实盘后端。两者通过同一套 `gateway` 抽象和同一套集成测试骨架接入，项目整体完成后再切换到 `CTP` 为主。
 
-## 项目架构
+## Branches
 
-```
-┌──────────────────────────────────────────┐
-│             Frontend (规划中)              │
-├──────────────────────────────────────────┤
-│       Server / FastAPI (待实现)            │
-├──────────────────────────────────────────┤
-│         Strategy / 策略引擎 (dev 进行中)    │
-├──────────────────────────────────────────┤
-│   event_engine/ — 事件系统                 │
-│   gateway/ — CTP 网关层                   │
-│   common/ — 共享数据类型                   │
-├──────────────────────────────────────────┤
-│     main.py — RuntimeGuard 连接守护        │
-└──────────────────────────────────────────┘
-```
+- `main`: 稳定核心交易框架
+- `dev`: 策略运行时开发分支，按 TDD 推进
 
-## 目录结构
+## Current Backend Model
 
-```
+- `TRADE_MODE=test` 时，网关优先走 `openctp_tts`
+- `TRADE_MODE=live` 时，网关走 `openctp_ctp`
+- 代码入口统一通过 [src/gateway/_ctp_backend.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/gateway/_ctp_backend.py)
+- 测试默认以 `TTS` 为主，后续切换到 `CTP` 不应重写测试流程，只切换环境和期望
+
+## Project Layout
+
+```text
 CNFuturesTradeSystem/
-├── common/               共享数据类型
-│   ├── contract.py       Contract 合约模型（CTP 原味）
-│   ├── exchange.py       交易所枚举
-│   ├── position.py       Position 持仓数据类
-│   └── trading_time.py   交易时间窗口
-├── event_engine/         事件系统
-│   ├── event.py          Event + EventType（纯 Enum）
-│   ├── event_engine.py   EventEngine 事件引擎
-│   └── logger.py         LogHandler 日志模块
-├── gateway/              CTP 网关层
-│   ├── base.py           GatewayStatus / BaseGateway
-│   ├── md_gateway.py     行情网关
-│   └── td_gateway.py     交易网关（认证/登录/下单/结算）
-├── strategy/             策略引擎
-│   ├── base.py           策略基类
-│   ├── engine.py         策略引擎
-│   ├── unit.py           执行单元 / 合成合约
-│   ├── db/
-│   └── examples/         示例策略
-├── main.py               RuntimeGuard 连接守护
-├── tests/                测试
+├── src/
+│   ├── common/
+│   │   ├── config.py
+│   │   ├── contract.py
+│   │   ├── exchange.py
+│   │   ├── position.py
+│   │   └── trading_time.py
+│   ├── event_bus/
+│   │   ├── event.py
+│   │   ├── event_bus.py
+│   │   └── logger.py
 │   ├── gateway/
-│   │   ├── market/
-│   │   │   └── test_md_gateway.py       行情网关单元测试（mock）
-│   │   └── trade/
-│   │       ├── test_td_gateway.py       交易网关单元测试（ mock）
-│   │       ├── test_live_trade.py       实盘集成测试（live）
-│   │       └── cleanup_positions.py     持仓清理工具
-│   ├── trader/  ← 旧目录已废弃
-│   ├── strategy/                        策略模块测试
-│   └── test_main.py                     RuntimeGuard 测试
+│   │   ├── _ctp_backend.py
+│   │   ├── base.py
+│   │   ├── md_gateway.py
+│   │   └── td_gateway.py
+│   ├── strategy/
+│   │   ├── base.py
+│   │   ├── runtime.py
+│   │   ├── unit.py
+│   │   └── examples/
+│   ├── tests/
+│   │   ├── common/
+│   │   ├── event_bus/
+│   │   ├── gateway/
+│   │   │   ├── market/
+│   │   │   └── trade/
+│   │   ├── strategy/
+│   │   └── test_main.py
+│   └── main.py
 ├── docs/
-│   ├── strategy_design.md              策略模块设计文档
-│   ├── connection_runtime.md           连接运行规则
-│   └── contract_code_rules.md          合约编码规则（已废弃）
-├── AGENTS.md              AI 助手指令
-├── flow/                  CTP 流文件
-├── logs/                  日志输出
-├── .env.local             本地配置
-└── pytest.ini             测试配置
+├── flow/
+├── logs/
+├── .env.example
+├── AGENTS.md
+└── pytest.ini
 ```
 
-## 核心模块
+## Core Modules
 
-### common/ — 共享数据类型
+### `src/common`
 
-| 模块 | 说明 |
-|------|------|
-| **合约** (`contract.py`) | `Contract` 合约模型，CTP 原生 `instrument_id`，通过 `from_ctp()` 工厂构造时自动解析 `product_id`、`year_month` 等字段 |
-| **交易所** (`exchange.py`) | 上期所/大商所/郑商所/中金所/能源中心/广期所 枚举 |
-| **持仓** (`position.py`) | `Position` 数据类，多空分列、计算属性 |
-| **交易时间** (`trading_time.py`) | 日盘/夜盘连接窗口判断 |
+- [config.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/config.py): 统一读取 `.env`，根据 `TRADE_MODE` 选择 `TTS_*` 或 `CTP_*`
+- [contract.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/contract.py): 合约模型，保留 CTP 原生 `instrument_id`
+- [position.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/position.py): 单合约持仓，多空分列
+- [trading_time.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/trading_time.py): 连接时间窗口判断
 
-### event_engine/ — 事件系统
+### `src/event_bus`
 
-| 模块 | 说明 |
-|------|------|
-| **事件类型** (`event.py`) | `EventType` 纯 `Enum`：连接、登录、行情、交易、查询、结算 |
-| **事件引擎** (`event_engine.py`) | 基于 Queue 的发布/订阅引擎，支持异步线程 |
-| **日志** (`logger.py`) | 按月分目录、按日分文件、错误日志分离 |
+- [event.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event.py): `Event` / `EventType`
+- [event_bus.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event_bus.py): `EventBus` 发布订阅总线
+- [logger.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/logger.py): 日志事件落盘
 
-### gateway/ — CTP 网关层
+### `src/gateway`
 
-| 模块 | 说明 |
-|------|------|
-| **网关基类** (`base.py`) | GatewayStatus 状态管理 |
-| **行情网关** (`md_gateway.py`) | CTP MdApi 封装，行情订阅、断线事件 |
-| **交易网关** (`td_gateway.py`) | CTP TraderApi 封装，含认证超时回退、结算确认、撤单 |
+- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/gateway/base.py): 网关基础状态
+- [md_gateway.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/gateway/md_gateway.py): 行情网关
+- [td_gateway.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/gateway/td_gateway.py): 交易网关
+- [_ctp_backend.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/gateway/_ctp_backend.py): `TTS` / `CTP` 后端切换
 
-### main.py — RuntimeGuard
+### `src/strategy`
 
-连接守护模块，功能：
-- 按交易时间窗口（日盘 08:56–15:01、夜盘 20:56–02:45）控制网关连接
-- CONNECTING 状态超时重试
-- 显式关闭后停止自动连接
+- [unit.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/unit.py): `AbstractUnit` / `RealUnit` / `SyntheticUnit`
+- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): 策略基类，负责 unit 管理与事件路由
+- [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册、启动、停止与事件接入
 
-### 实现状态
+## Strategy Status
 
-### main 分支 （✅ 稳定）
+当前已经落地：
 
-- [x] EventEngine 事件引擎
-- [x] MdGateway / TdGateway（含认证、结算确认、超时回退）
-- [x] RuntimeGuard 连接守护
-- [x] Contract 合约模型
-- [x] LogHandler 日志模块
-- [x] 实盘集成测试（连接/认证/登录/行情/交易/结算）
-- [x] 撤单测试覆盖
+- `Position`
+- `AbstractUnit` / `RealUnit` / `SyntheticUnit`
+- `BaseStrategy`
+- `StrategyRuntime`
+- synthetic tick 经腿合约驱动
+- strategy 级 `on_order` / `on_trade` 回调
 
-### dev 分支 （🔄 策略引擎 TDD 开发中）
+尚未完成：
 
-- [ ] Step 1 — Position 持仓模型
-- [ ] Step 2 — AbstractUnit + RealUnit 执行单元
-- [ ] Step 3 — SyntheticUnit 合成合约单元
-- [ ] Step 4 — BaseStrategy 策略基类
-- [ ] Step 5 — StrategyEngine 策略引擎
-- [ ] Step 6 — Bar + BarBuilder + BarCache K线系统
-- [ ] Step 7 — IndicatorEngine 指标引擎
-- [ ] Step 8 — OrderManager 订单管理
-- [ ] Step 9 — 示例策略 + 全链路集成
-- [ ] Step 10 — 实盘集成测试
+- Bar / BarBuilder / BarCache
+- IndicatorService
+- OrderManager
+- 示例策略和全链路策略集成
 
----
-*最后更新：2026-05-08 · dev 分支*
+## Test Layout
+
+```text
+src/tests/
+├── common/
+├── event_bus/
+├── gateway/
+│   ├── market/test_md_gateway.py
+│   └── trade/
+│       ├── _integration_support.py
+│       ├── cleanup_positions.py
+│       ├── test_live_trade.py
+│       ├── test_td_gateway.py
+│       └── test_tts_integration.py
+├── strategy/
+└── test_main.py
+```
+
+说明：
+
+- [test_live_trade.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/gateway/trade/test_live_trade.py): `TTS` / `CTP` 共用主流程集成测试
+- [test_tts_integration.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/gateway/trade/test_tts_integration.py): `TTS` 专属补充覆盖
+- [_integration_support.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/gateway/trade/_integration_support.py): 共享连接、事件等待、发单和清仓骨架
+
+## Test Markers
+
+- `gateway`: 所有 gateway 相关测试
+- `live`: 会连接真实柜台环境。这里既可能是 `TTS`，也可能是 `CTP`
+- `live_trade_window`: 会真实发单，要求在可交易时段运行
+
+`pytest` 默认使用 `-m "not gateway"`，即默认不跑网关测试。
+
+常用命令：
+
+```powershell
+python -m pytest
+python -m pytest src/tests
+python -m pytest -m "gateway and not live"
+python -m pytest -m "gateway and live"
+python -m pytest -m "gateway and live_trade_window"
+```
+
+## Environment
+
+使用 `.env`，参考 [.env.example](C:/Users/suoni/Desktop/CNFuturesTradeSystem/.env.example)。
+
+关键变量：
+
+- `TRADE_MODE=test|live`
+- `TTS_USER_ID`, `TTS_PASSWORD`, `TTS_BROKER_ID`, `TTS_TD_FRONT`, `TTS_MD_FRONT`
+- `CTP_USER_ID`, `CTP_PASSWORD`, `CTP_BROKER_ID`, `CTP_TD_FRONT`, `CTP_MD_FRONT`, `CTP_APP_ID`, `CTP_AUTH_CODE`
+
+默认建议：
+
+- 日常开发与策略联调：`TRADE_MODE=test`
+- 最终切到实盘：`TRADE_MODE=live`
+
+## Dependencies
+
+```powershell
+pip install openctp-ctp openctp-tts python-dotenv pytest
+```
+
+如果本地没有 `openctp_tts`，代码会回退到 `openctp_ctp`，但默认开发流程不建议依赖这个回退。
+
+## Runtime Guard
+
+[src/main.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/main.py) 中的 `RuntimeGuard` 负责：
+
+- 仅在连接窗口内主动连接
+- `CONNECTING` 卡住超时后重试
+- 显式 `stop()` 后停止自动连接
+
+连接窗口与职责边界见 [connection_runtime.md](C:/Users/suoni/Desktop/CNFuturesTradeSystem/docs/connection_runtime.md)。

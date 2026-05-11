@@ -1,10 +1,10 @@
-from src.event_engine.event import EventType
+from src.event_bus.event import EventType
 from src.strategy.base import BaseStrategy, StrategyStatus
 
 
-class StrategyEngine:
-    def __init__(self, event_engine, td_gateway, md_gateway):
-        self.event_engine = event_engine
+class StrategyRuntime:
+    def __init__(self, event_bus, td_gateway, md_gateway):
+        self.event_bus = event_bus
         self.td_gateway = td_gateway
         self.md_gateway = md_gateway
         self.strategies: dict[str, BaseStrategy] = {}
@@ -14,14 +14,19 @@ class StrategyEngine:
     # ── 策略管理 ──
 
     def register(self, strategy: BaseStrategy):
-        strategy.engine = self
+        strategy.runtime = self
         strategy.on_init()
         self.strategies[strategy.name] = strategy
 
     def unregister(self, name: str):
-        s = self.strategies.pop(name, None)
-        if s:
+        s = self.get(name)
+        if s is None:
+            return
+        if s.status == StrategyStatus.RUNNING:
+            self.stop(name)
+        else:
             s.on_stop()
+        self.strategies.pop(name, None)
 
     def get(self, name: str) -> BaseStrategy | None:
         return self.strategies.get(name)
@@ -36,13 +41,13 @@ class StrategyEngine:
         if not s or s.status != StrategyStatus.STOPPED:
             return
         s.status = StrategyStatus.STARTING
-        self.event_engine.register(EventType.TICK, s._route_tick)
-        self.event_engine.register(EventType.POSITION, s._route_position)
-        self.event_engine.register(EventType.ACCOUNT, s._route_account)
+        self.event_bus.register(EventType.TICK, s._route_tick)
+        self.event_bus.register(EventType.POSITION, s._route_position)
+        self.event_bus.register(EventType.ACCOUNT, s._route_account)
         self._order_handlers[name] = self._make_on_order(s)
         self._trade_handlers[name] = self._make_on_trade(s)
-        self.event_engine.register(EventType.ORDER, self._order_handlers[name])
-        self.event_engine.register(EventType.TRADE, self._trade_handlers[name])
+        self.event_bus.register(EventType.ORDER, self._order_handlers[name])
+        self.event_bus.register(EventType.TRADE, self._trade_handlers[name])
         for unit in s.units.values():
             unit.subscribe_market(self.md_gateway)
         s.on_start()
@@ -54,13 +59,13 @@ class StrategyEngine:
             return
         s.status = StrategyStatus.STOPPING
         s.on_stop()
-        self.event_engine.unregister(EventType.TICK, s._route_tick)
-        self.event_engine.unregister(EventType.POSITION, s._route_position)
-        self.event_engine.unregister(EventType.ACCOUNT, s._route_account)
+        self.event_bus.unregister(EventType.TICK, s._route_tick)
+        self.event_bus.unregister(EventType.POSITION, s._route_position)
+        self.event_bus.unregister(EventType.ACCOUNT, s._route_account)
         if name in self._order_handlers:
-            self.event_engine.unregister(EventType.ORDER, self._order_handlers.pop(name))
+            self.event_bus.unregister(EventType.ORDER, self._order_handlers.pop(name))
         if name in self._trade_handlers:
-            self.event_engine.unregister(EventType.TRADE, self._trade_handlers.pop(name))
+            self.event_bus.unregister(EventType.TRADE, self._trade_handlers.pop(name))
 
     def start_all(self):
         for name in self.list_names():
@@ -78,6 +83,7 @@ class StrategyEngine:
             unit = strategy.get_unit(order.get("instrument_id", ""))
             if unit:
                 unit.on_order(event)
+                strategy.on_order(order, unit)
         return handler
 
     def _make_on_trade(self, strategy):
@@ -86,4 +92,5 @@ class StrategyEngine:
             unit = strategy.get_unit(trade.get("instrument_id", ""))
             if unit:
                 unit.on_trade(event)
+                strategy.on_trade(trade, unit)
         return handler

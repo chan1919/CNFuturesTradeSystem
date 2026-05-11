@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
+
 from src.common.position import Position
-from src.common.contract import Contract
 
 
 class AbstractUnit(ABC):
@@ -43,6 +43,9 @@ class AbstractUnit(ABC):
     def _reset_state(self):
         pass
 
+    def component_instrument_ids(self) -> set[str]:
+        return set()
+
     @abstractmethod
     def _process_tick(self, tick: dict): ...
 
@@ -53,10 +56,11 @@ class RealUnit(AbstractUnit):
 
     def on_tick(self, tick: dict):
         if not self.enabled:
-            return
+            return None
         if tick.get("instrument_id") != self.contract.instrument_id:
-            return
+            return None
         self._process_tick(tick)
+        return tick
 
     def _process_tick(self, tick: dict):
         pass
@@ -70,6 +74,7 @@ class SyntheticUnit(AbstractUnit):
         )
         self.components = components
         self.weights = weights
+        self._component_ids = {component.instrument_id for component in components}
         self._price_cache: dict[str, float] = {}
 
     def subscribe_market(self, md_gateway):
@@ -78,19 +83,25 @@ class SyntheticUnit(AbstractUnit):
 
     def on_tick(self, tick: dict):
         if not self.enabled:
-            return
+            return None
 
-        for comp in self.components:
-            if tick.get("instrument_id") == comp.instrument_id:
-                self._price_cache[comp.instrument_id] = tick["last_price"]
-                break
+        source_instrument_id = tick.get("instrument_id")
+        if source_instrument_id not in self._component_ids:
+            return None
+
+        self._price_cache[source_instrument_id] = tick["last_price"]
 
         if len(self._price_cache) == len(self.components):
             synthetic_price = self._compute_price()
-            tick = dict(tick)
-            tick["instrument_id"] = self.instrument_id
-            tick["synthetic_price"] = synthetic_price
-            self._process_tick(tick)
+            synthetic_tick = dict(tick)
+            synthetic_tick["source_instrument_id"] = source_instrument_id
+            synthetic_tick["source_last_price"] = tick["last_price"]
+            synthetic_tick["instrument_id"] = self.instrument_id
+            synthetic_tick["last_price"] = synthetic_price
+            synthetic_tick["synthetic_price"] = synthetic_price
+            self._process_tick(synthetic_tick)
+            return synthetic_tick
+        return None
 
     def _compute_price(self) -> float:
         return sum(
@@ -100,6 +111,9 @@ class SyntheticUnit(AbstractUnit):
 
     def _process_tick(self, tick: dict):
         pass
+
+    def component_instrument_ids(self) -> set[str]:
+        return set(self._component_ids)
 
     def _reset_state(self):
         super()._reset_state()

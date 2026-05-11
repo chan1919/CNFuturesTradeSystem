@@ -133,3 +133,4 @@ flow/
 logs/*.log
 !logs/
 .env.local
+.env
