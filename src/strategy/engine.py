@@ -19,9 +19,14 @@ class StrategyEngine:
         self.strategies[strategy.name] = strategy
 
     def unregister(self, name: str):
-        s = self.strategies.pop(name, None)
-        if s:
+        s = self.get(name)
+        if s is None:
+            return
+        if s.status == StrategyStatus.RUNNING:
+            self.stop(name)
+        else:
             s.on_stop()
+        self.strategies.pop(name, None)
 
     def get(self, name: str) -> BaseStrategy | None:
         return self.strategies.get(name)
@@ -78,6 +83,7 @@ class StrategyEngine:
             unit = strategy.get_unit(order.get("instrument_id", ""))
             if unit:
                 unit.on_order(event)
+                strategy.on_order(order, unit)
         return handler
 
     def _make_on_trade(self, strategy):
@@ -86,4 +92,5 @@ class StrategyEngine:
             unit = strategy.get_unit(trade.get("instrument_id", ""))
             if unit:
                 unit.on_trade(event)
+                strategy.on_trade(trade, unit)
         return handler

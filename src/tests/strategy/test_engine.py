@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, call
 from src.event_engine.event import EventType
 from src.strategy.engine import StrategyEngine
 from src.strategy.base import BaseStrategy, StrategyStatus
-from src.strategy.unit import RealUnit
+from src.strategy.unit import RealUnit, SyntheticUnit
 from src.common.exchange import Exchange
 from src.common.contract import Contract
 
@@ -75,6 +75,17 @@ class TestStrategyEngineRegister:
         engine.register(s)
         engine.unregister("test_strat")
         assert "test_strat" not in engine.strategies
+
+    def test_unregister_running_strategy_unsubscribes_handlers(self, engine):
+        s = DummyStrategy("test_strat")
+        engine.register(s)
+        engine.start("test_strat")
+
+        engine.unregister("test_strat")
+
+        engine.event_engine.unregister.assert_any_call(EventType.TICK, s._route_tick)
+        engine.event_engine.unregister.assert_any_call(EventType.POSITION, s._route_position)
+        engine.event_engine.unregister.assert_any_call(EventType.ACCOUNT, s._route_account)
 
     def test_unregister_does_nothing_for_missing(self, engine):
         engine.unregister("nonexistent")  # no error
@@ -224,9 +235,19 @@ class TestStrategyEngineBulk:
 
 
 class TestStrategyEngineEventRouting:
-    def test_order_event_routes_to_correct_unit(self, engine):
-        s = DummyStrategy("test_strat")
+    def test_order_event_routes_to_unit_and_strategy(self, engine):
+        class OrderTrackingStrategy(DummyStrategy):
+            def __init__(self, name):
+                super().__init__(name)
+                self.orders = []
+
+            def on_order(self, order, unit):
+                self.orders.append((order["order_ref"], unit.instrument_id))
+
+        s = OrderTrackingStrategy("test_strat")
         u = make_real_unit("rb2501")
+        unit_orders = []
+        u.on_order = lambda event: unit_orders.append(event.data["order_ref"])
         s.add_unit(u)
         engine.register(s)
         engine.start("test_strat")
@@ -241,10 +262,22 @@ class TestStrategyEngineEventRouting:
 
         order_data = {"instrument_id": "rb2501", "order_ref": "123"}
         handler(MagicMock(data=order_data))
+        assert unit_orders == ["123"]
+        assert s.orders == [("123", "rb2501")]
 
-    def test_trade_event_routes_to_correct_unit(self, engine):
-        s = DummyStrategy("test_strat")
+    def test_trade_event_routes_to_unit_and_strategy(self, engine):
+        class TradeTrackingStrategy(DummyStrategy):
+            def __init__(self, name):
+                super().__init__(name)
+                self.trades = []
+
+            def on_trade(self, trade, unit):
+                self.trades.append((trade["trade_id"], unit.instrument_id))
+
+        s = TradeTrackingStrategy("test_strat")
         u = make_real_unit("rb2501")
+        unit_trades = []
+        u.on_trade = lambda event: unit_trades.append(event.data["trade_id"])
         s.add_unit(u)
         engine.register(s)
         engine.start("test_strat")
@@ -258,3 +291,34 @@ class TestStrategyEngineEventRouting:
 
         trade_data = {"instrument_id": "rb2501", "trade_id": "t001"}
         handler(MagicMock(data=trade_data))
+        assert unit_trades == ["t001"]
+        assert s.trades == [("t001", "rb2501")]
+
+    def test_tick_handler_routes_component_tick_to_synthetic_unit(self, engine):
+        class TickTrackingStrategy(DummyStrategy):
+            def __init__(self, name):
+                super().__init__(name)
+                self.ticks = []
+
+            def on_tick(self, tick, unit):
+                self.ticks.append((tick["instrument_id"], tick["synthetic_price"], unit.instrument_id))
+
+        s = TickTrackingStrategy("test_strat")
+        components = [Contract.from_ctp("rb2501", Exchange.SHFE), Contract.from_ctp("rb2510", Exchange.SHFE)]
+        unit = SyntheticUnit("spread", components, [1.0, -1.0], {})
+        s.add_unit(unit)
+        engine.register(s)
+        engine.start("test_strat")
+
+        tick_calls = [
+            c for c in engine.event_engine.register.call_args_list
+            if c[0][0] == EventType.TICK
+        ]
+        assert len(tick_calls) == 1
+        handler = tick_calls[0][0][1]
+
+        handler(MagicMock(data={"instrument_id": "rb2501", "last_price": 3500.0}))
+        assert s.ticks == []
+
+        handler(MagicMock(data={"instrument_id": "rb2510", "last_price": 3400.0}))
+        assert s.ticks == [("spread", 100.0, "spread")]
