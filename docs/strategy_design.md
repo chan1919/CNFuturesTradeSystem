@@ -8,7 +8,7 @@ The strategy module converts market events into trading actions.
 
 Current design principles:
 
-- `StrategyEngine` manages strategy lifecycle and event integration
+- `StrategyRuntime` manages strategy lifecycle and event integration
 - each strategy owns multiple units
 - units are the smallest execution elements
 - both real contracts and synthetic contracts are supported
@@ -16,7 +16,7 @@ Current design principles:
 
 ## Core Roles
 
-### `StrategyEngine`
+### `StrategyRuntime`
 
 Responsibilities:
 
@@ -25,7 +25,7 @@ Responsibilities:
 - subscribe unit market data through `MdGateway`
 - route `ORDER` and `TRADE` events into both unit-level and strategy-level hooks
 
-Current implementation: [engine.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/engine.py)
+Current implementation: [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py)
 
 ### `BaseStrategy`
 
@@ -65,17 +65,17 @@ Current implementation: [unit.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/sr
 ## Event Flow
 
 ```text
-MdGateway -> EventEngine -> BaseStrategy._route_tick
+MdGateway -> EventBus -> StrategyRuntime -> BaseStrategy._route_tick
                            -> direct unit match
                            -> synthetic component listeners
                            -> unit.on_tick(...)
                            -> strategy.on_tick(...)
 
-TdGateway ORDER -> StrategyEngine handler
+TdGateway ORDER -> EventBus -> StrategyRuntime handler
                  -> unit.on_order(...)
                  -> strategy.on_order(...)
 
-TdGateway TRADE -> StrategyEngine handler
+TdGateway TRADE -> EventBus -> StrategyRuntime handler
                  -> unit.on_trade(...)
                  -> strategy.on_trade(...)
 ```
@@ -105,7 +105,7 @@ Strategy tests live in:
 ```text
 src/tests/strategy/
 ├── test_base.py
-├── test_engine.py
+├── test_runtime.py
 ├── test_position.py
 ├── test_synthetic.py
 └── test_unit.py
@@ -125,7 +125,7 @@ Covered behaviors:
 Planned next steps:
 
 1. Bar / BarBuilder / BarCache
-2. IndicatorEngine
+2. IndicatorService
 3. OrderManager
 4. example strategies
 5. full strategy-to-gateway integration coverage

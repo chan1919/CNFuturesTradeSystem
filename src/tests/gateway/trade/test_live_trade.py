@@ -11,7 +11,7 @@ import time
 import pytest
 
 from src.common.config import is_live_mode
-from src.event_engine.event import EventType
+from src.event_bus.event import EventType
 from src.tests.gateway.trade._integration_support import EventCollector, GatewayIntegrationHarness
 
 
@@ -43,7 +43,7 @@ class TestGatewayIntegration:
     def test_02_query_account(self):
         self.harness.connect_td()
 
-        account = EventCollector(self.harness.engine, EventType.ACCOUNT)
+        account = EventCollector(self.harness.event_bus, EventType.ACCOUNT)
         self.harness.td_gw.query_account()
         event = account.wait(timeout=15)
         data = event.data
@@ -57,7 +57,7 @@ class TestGatewayIntegration:
     def test_03_query_positions(self):
         self.harness.connect_td()
 
-        positions = EventCollector(self.harness.engine, EventType.POSITION)
+        positions = EventCollector(self.harness.event_bus, EventType.POSITION)
         self.harness.td_gw.query_positions()
         time.sleep(2)
         self.harness.drain_events(iterations=30)
@@ -93,7 +93,7 @@ class TestGatewayIntegration:
         print(f"\n[Open] ref={open_ref}")
         assert open_trade.events, "expected trade event after opening position"
 
-        close_tick_collector = EventCollector(self.harness.engine, EventType.TICK)
+        close_tick_collector = EventCollector(self.harness.event_bus, EventType.TICK)
         self.harness.md_gw.subscribe(INSTRUMENT)
         close_tick = close_tick_collector.wait(timeout=15).data
 
@@ -107,9 +107,9 @@ class TestGatewayIntegration:
     def test_06_settlement_confirm(self):
         self.harness.connect_td()
 
-        settlement_info = EventCollector(self.harness.engine, EventType.SETTLEMENT_INFO)
+        settlement_info = EventCollector(self.harness.event_bus, EventType.SETTLEMENT_INFO)
         settlement_confirm = EventCollector(
-            self.harness.engine, EventType.SETTLEMENT_INFO_CONFIRMED
+            self.harness.event_bus, EventType.SETTLEMENT_INFO_CONFIRMED
         )
 
         self.harness.td_gw.qry_settlement_info()
@@ -126,7 +126,7 @@ class TestGatewayIntegration:
 
         tick = self.harness.wait_for_tick(INSTRUMENT)
         low_price = round(tick["bid_price1"] * 0.5, 0)
-        orders = EventCollector(self.harness.engine, EventType.ORDER)
+        orders = EventCollector(self.harness.event_bus, EventType.ORDER)
 
         order_ref = self.harness.td_gw.send_order(
             instrument_id=INSTRUMENT,

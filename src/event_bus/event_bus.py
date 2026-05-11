@@ -2,10 +2,10 @@ from collections import defaultdict
 import queue
 import threading
 
-from src.event_engine.event import Event
+from src.event_bus.event import Event
 
 
-class EventEngine:
+class EventBus:
     def __init__(self):
         self._queue = queue.Queue()
         self._handlers = defaultdict(list)

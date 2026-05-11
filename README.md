@@ -7,7 +7,7 @@
 ## Branches
 
 - `main`: 稳定核心交易框架
-- `dev`: 策略引擎开发分支，按 TDD 推进
+- `dev`: 策略运行时开发分支，按 TDD 推进
 
 ## Current Backend Model
 
@@ -27,9 +27,9 @@ CNFuturesTradeSystem/
 │   │   ├── exchange.py
 │   │   ├── position.py
 │   │   └── trading_time.py
-│   ├── event_engine/
+│   ├── event_bus/
 │   │   ├── event.py
-│   │   ├── event_engine.py
+│   │   ├── event_bus.py
 │   │   └── logger.py
 │   ├── gateway/
 │   │   ├── _ctp_backend.py
@@ -38,12 +38,12 @@ CNFuturesTradeSystem/
 │   │   └── td_gateway.py
 │   ├── strategy/
 │   │   ├── base.py
-│   │   ├── engine.py
+│   │   ├── runtime.py
 │   │   ├── unit.py
 │   │   └── examples/
 │   ├── tests/
 │   │   ├── common/
-│   │   ├── event_engine/
+│   │   ├── event_bus/
 │   │   ├── gateway/
 │   │   │   ├── market/
 │   │   │   └── trade/
@@ -67,11 +67,11 @@ CNFuturesTradeSystem/
 - [position.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/position.py): 单合约持仓，多空分列
 - [trading_time.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/trading_time.py): 连接时间窗口判断
 
-### `src/event_engine`
+### `src/event_bus`
 
-- [event.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_engine/event.py): `Event` / `EventType`
-- [event_engine.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_engine/event_engine.py): 发布订阅总线
-- [logger.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_engine/logger.py): 日志事件落盘
+- [event.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event.py): `Event` / `EventType`
+- [event_bus.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event_bus.py): `EventBus` 发布订阅总线
+- [logger.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/logger.py): 日志事件落盘
 
 ### `src/gateway`
 
@@ -84,7 +84,7 @@ CNFuturesTradeSystem/
 
 - [unit.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/unit.py): `AbstractUnit` / `RealUnit` / `SyntheticUnit`
 - [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): 策略基类，负责 unit 管理与事件路由
-- [engine.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/engine.py): 策略注册、启动、停止与事件接入
+- [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册、启动、停止与事件接入
 
 ## Strategy Status
 
@@ -93,14 +93,14 @@ CNFuturesTradeSystem/
 - `Position`
 - `AbstractUnit` / `RealUnit` / `SyntheticUnit`
 - `BaseStrategy`
-- `StrategyEngine`
+- `StrategyRuntime`
 - synthetic tick 经腿合约驱动
 - strategy 级 `on_order` / `on_trade` 回调
 
 尚未完成：
 
 - Bar / BarBuilder / BarCache
-- IndicatorEngine
+- IndicatorService
 - OrderManager
 - 示例策略和全链路策略集成
 
@@ -109,7 +109,7 @@ CNFuturesTradeSystem/
 ```text
 src/tests/
 ├── common/
-├── event_engine/
+├── event_bus/
 ├── gateway/
 │   ├── market/test_md_gateway.py
 │   └── trade/

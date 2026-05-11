@@ -48,7 +48,7 @@ No `pyproject.toml`, no `requirements.txt`, and no separate lint/typecheck toolc
 
 ## Architecture
 
-Event-driven system. [event_engine.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_engine/event_engine.py) is the publish/subscribe core. Gateways in `src/gateway/` wrap either `TTS` or `CTP` native APIs and convert callbacks into `Event` objects pushed into the engine.
+Event-driven system. [event_bus.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event_bus.py) is the publish/subscribe core. Gateways in `src/gateway/` wrap either `TTS` or `CTP` native APIs and convert callbacks into `Event` objects pushed into the bus.
 
 ## Gateway Unit-Test Mock Pattern
 

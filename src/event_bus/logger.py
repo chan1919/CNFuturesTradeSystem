@@ -3,7 +3,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from src.event_engine.event import EventType
+from src.event_bus.event import EventType
 
 LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
 
@@ -27,8 +27,8 @@ LOG_EVENTS = [
 
 
 class LogHandler:
-    def __init__(self, event_engine, level=logging.INFO):
-        self._ee = event_engine
+    def __init__(self, event_bus, level=logging.INFO):
+        self._ee = event_bus
         self._logger = logging.getLogger("CNFutures")
         self._logger.setLevel(level)
         self._logger.handlers.clear()

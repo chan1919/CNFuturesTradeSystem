@@ -18,7 +18,7 @@ The design is backend-agnostic:
 
 1. `connect()` / `close()` / `login()` / `authenticate()`
 2. `subscribe()` / `send_order()` / `cancel_order()` / `query_*`
-3. translating backend callbacks into `EventEngine` events
+3. translating backend callbacks into `EventBus` events
 4. maintaining minimal runtime state such as `status`, `front_id`, `session_id`
 
 `src/gateway/` is not responsible for:

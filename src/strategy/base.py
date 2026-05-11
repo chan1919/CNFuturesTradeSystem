@@ -11,10 +11,10 @@ class StrategyStatus:
 
 
 class BaseStrategy(ABC):
-    def __init__(self, name: str, engine=None):
+    def __init__(self, name: str, runtime=None):
         self.name = name
         self.status = StrategyStatus.STOPPED
-        self.engine = engine
+        self.runtime = runtime
         self.units: dict[str, AbstractUnit] = {}
         self._last_account: dict = {}
         self._component_unit_map: dict[str, list[AbstractUnit]] = {}

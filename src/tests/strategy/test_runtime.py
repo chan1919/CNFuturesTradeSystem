@@ -1,9 +1,9 @@
-"""Step 5: StrategyEngine 测试"""
+"""Step 5: StrategyRuntime 测试"""
 import pytest
 from unittest.mock import MagicMock, call
 
-from src.event_engine.event import EventType
-from src.strategy.engine import StrategyEngine
+from src.event_bus.event import EventType
+from src.strategy.runtime import StrategyRuntime
 from src.strategy.base import BaseStrategy, StrategyStatus
 from src.strategy.unit import RealUnit, SyntheticUnit
 from src.common.exchange import Exchange
@@ -40,24 +40,24 @@ def make_real_unit(inst_id):
 
 @pytest.fixture
 def engine():
-    return StrategyEngine(
-        event_engine=MagicMock(),
+    return StrategyRuntime(
+        event_bus=MagicMock(),
         td_gateway=MagicMock(),
         md_gateway=MagicMock(),
     )
 
 
-class TestStrategyEngineRegister:
+class TestStrategyRuntimeRegister:
     def test_register_adds_strategy_to_dict(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
         assert "test_strat" in engine.strategies
         assert engine.strategies["test_strat"] is s
 
-    def test_register_sets_engine_reference(self, engine):
+    def test_register_sets_runtime_reference(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        assert s.engine is engine
+        assert s.runtime is engine
 
     def test_register_calls_on_init(self, engine):
         called = []
@@ -83,9 +83,9 @@ class TestStrategyEngineRegister:
 
         engine.unregister("test_strat")
 
-        engine.event_engine.unregister.assert_any_call(EventType.TICK, s._route_tick)
-        engine.event_engine.unregister.assert_any_call(EventType.POSITION, s._route_position)
-        engine.event_engine.unregister.assert_any_call(EventType.ACCOUNT, s._route_account)
+        engine.event_bus.unregister.assert_any_call(EventType.TICK, s._route_tick)
+        engine.event_bus.unregister.assert_any_call(EventType.POSITION, s._route_position)
+        engine.event_bus.unregister.assert_any_call(EventType.ACCOUNT, s._route_account)
 
     def test_unregister_does_nothing_for_missing(self, engine):
         engine.unregister("nonexistent")  # no error
@@ -104,13 +104,13 @@ class TestStrategyEngineRegister:
         assert set(engine.list_names()) == {"a", "b"}
 
 
-class TestStrategyEngineStart:
+class TestStrategyRuntimeStart:
     def test_start_registers_tick_handler(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
         engine.md_gateway.subscribe = MagicMock()
         engine.start("test_strat")
-        engine.event_engine.register.assert_any_call(
+        engine.event_bus.register.assert_any_call(
             EventType.TICK, s._route_tick
         )
 
@@ -119,7 +119,7 @@ class TestStrategyEngineStart:
         engine.register(s)
         engine.md_gateway.subscribe = MagicMock()
         engine.start("test_strat")
-        engine.event_engine.register.assert_any_call(
+        engine.event_bus.register.assert_any_call(
             EventType.POSITION, s._route_position
         )
 
@@ -128,7 +128,7 @@ class TestStrategyEngineStart:
         engine.register(s)
         engine.md_gateway.subscribe = MagicMock()
         engine.start("test_strat")
-        engine.event_engine.register.assert_any_call(
+        engine.event_bus.register.assert_any_call(
             EventType.ACCOUNT, s._route_account
         )
 
@@ -162,14 +162,14 @@ class TestStrategyEngineStart:
         engine.register(s)
         s.status = StrategyStatus.RUNNING
         engine.start("test_strat")
-        engine.event_engine.register.assert_not_called()
+        engine.event_bus.register.assert_not_called()
 
     def test_start_skips_if_not_registered(self, engine):
         engine.start("nonexistent")
-        engine.event_engine.register.assert_not_called()
+        engine.event_bus.register.assert_not_called()
 
 
-class TestStrategyEngineStop:
+class TestStrategyRuntimeStop:
     def test_stop_calls_strategy_on_stop(self, engine):
         s = SpyStrategy("test_strat")
         engine.register(s)
@@ -182,7 +182,7 @@ class TestStrategyEngineStop:
         engine.register(s)
         s.status = StrategyStatus.RUNNING
         engine.stop("test_strat")
-        engine.event_engine.unregister.assert_any_call(
+        engine.event_bus.unregister.assert_any_call(
             EventType.TICK, s._route_tick
         )
 
@@ -191,7 +191,7 @@ class TestStrategyEngineStop:
         engine.register(s)
         s.status = StrategyStatus.RUNNING
         engine.stop("test_strat")
-        engine.event_engine.unregister.assert_any_call(
+        engine.event_bus.unregister.assert_any_call(
             EventType.POSITION, s._route_position
         )
 
@@ -200,7 +200,7 @@ class TestStrategyEngineStop:
         engine.register(s)
         s.status = StrategyStatus.RUNNING
         engine.stop("test_strat")
-        engine.event_engine.unregister.assert_any_call(
+        engine.event_bus.unregister.assert_any_call(
             EventType.ACCOUNT, s._route_account
         )
 
@@ -208,10 +208,10 @@ class TestStrategyEngineStop:
         s = DummyStrategy("test_strat")
         engine.register(s)
         engine.stop("test_strat")  # status = STOPPED
-        engine.event_engine.unregister.assert_not_called()
+        engine.event_bus.unregister.assert_not_called()
 
 
-class TestStrategyEngineBulk:
+class TestStrategyRuntimeBulk:
     def test_start_all_sets_all_running(self, engine):
         s1 = DummyStrategy("a")
         s2 = DummyStrategy("b")
@@ -234,7 +234,7 @@ class TestStrategyEngineBulk:
         assert s2.status == StrategyStatus.STOPPED
 
 
-class TestStrategyEngineEventRouting:
+class TestStrategyRuntimeEventRouting:
     def test_order_event_routes_to_unit_and_strategy(self, engine):
         class OrderTrackingStrategy(DummyStrategy):
             def __init__(self, name):
@@ -254,7 +254,7 @@ class TestStrategyEngineEventRouting:
 
         # Get the registered ORDER handler
         order_calls = [
-            c for c in engine.event_engine.register.call_args_list
+            c for c in engine.event_bus.register.call_args_list
             if c[0][0] == EventType.ORDER
         ]
         assert len(order_calls) == 1
@@ -283,7 +283,7 @@ class TestStrategyEngineEventRouting:
         engine.start("test_strat")
 
         trade_calls = [
-            c for c in engine.event_engine.register.call_args_list
+            c for c in engine.event_bus.register.call_args_list
             if c[0][0] == EventType.TRADE
         ]
         assert len(trade_calls) == 1
@@ -311,7 +311,7 @@ class TestStrategyEngineEventRouting:
         engine.start("test_strat")
 
         tick_calls = [
-            c for c in engine.event_engine.register.call_args_list
+            c for c in engine.event_bus.register.call_args_list
             if c[0][0] == EventType.TICK
         ]
         assert len(tick_calls) == 1

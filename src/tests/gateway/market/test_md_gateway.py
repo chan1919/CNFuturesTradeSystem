@@ -6,8 +6,8 @@
 """
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
-from src.event_engine.event_engine import EventEngine
-from src.event_engine.event import Event, EventType
+from src.event_bus.event_bus import EventBus
+from src.event_bus.event import Event, EventType
 
 pytestmark = pytest.mark.gateway
 
@@ -28,7 +28,7 @@ class TestMdGatewayConnect:
 
     def test_connect_calls_register_front_and_init(self):
         """connect() 应调用 RegisterFront 和 Init"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -44,7 +44,7 @@ class TestMdGatewayConnect:
 
     def test_connect_changes_status(self):
         """connect() 后 status 应为 CONNECTING"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -68,7 +68,7 @@ class TestMdGatewayCallbacks:
 
     def test_on_front_connected_puts_event(self):
         """OnFrontConnected 回调应推送 EventType.MD_CONNECTED"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -92,7 +92,7 @@ class TestMdGatewayCallbacks:
 
     def test_on_rsp_user_login_puts_event(self):
         """OnRspUserLogin 成功应推送 EventType.MD_LOGIN"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -131,7 +131,7 @@ class TestMdGatewayCallbacks:
 
     def test_on_rsp_user_login_failure(self):
         """OnRspUserLogin 失败不应改变状态为 logined"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -154,7 +154,7 @@ class TestMdGatewayCallbacks:
 
     def test_on_rtn_depth_market_data_puts_tick_event(self):
         """OnRtnDepthMarketData 应推送 EventType.TICK"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -199,7 +199,7 @@ class TestMdGatewayCallbacks:
 
     def test_on_front_disconnected_puts_event(self):
         """OnFrontDisconnected 应推送 EventType.MD_DISCONNECTED"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -231,7 +231,7 @@ class TestMdGatewaySubscribe:
 
     def test_subscribe_calls_subscribe_market_data(self):
         """subscribe() 应调用 SubscribeMarketData"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -245,7 +245,7 @@ class TestMdGatewaySubscribe:
 
     def test_subscribe_not_connected_raises(self):
         """未连接时 subscribe 应抛异常"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -258,7 +258,7 @@ class TestMdGatewaySubscribe:
 
     def test_subscribe_single_instrument(self):
         """订阅单个合约"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
@@ -277,7 +277,7 @@ class TestMdGatewayLogin:
 
     def test_auto_login_on_front_connected(self):
         """连接成功后应自动调用 ReqUserLogin"""
-        engine = EventEngine()
+        engine = EventBus()
         md_api = make_mock_md_api()
 
         with patch("gateway.md_gateway.mdapi") as mock_mdapi:
