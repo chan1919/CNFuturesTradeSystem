@@ -25,6 +25,9 @@ class EventType(Enum):
     POSITION = "position"
     ACCOUNT = "account"
 
+    # 订单操作事件
+    ORDER_INSERT = "order.insert"
+
     # 查询结果事件（由查询请求触发）
     QRV_ORDER = "qry.order"
     QRV_TRADE = "qry.trade"

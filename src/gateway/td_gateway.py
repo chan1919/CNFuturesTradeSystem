@@ -278,6 +278,21 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "log_level": "info",
         }))
 
+    def OnRspOrderInsert(self, pOrder, pRspInfo, nRequestID, bIsLast):
+        error_id = pRspInfo.ErrorID if pRspInfo else -1
+        error_msg = pRspInfo.ErrorMsg if pRspInfo else ""
+        log_level = "info" if error_id == 0 else "error"
+        data = {
+            "error_id": error_id,
+            "error_msg": error_msg,
+            "request_id": nRequestID,
+            "log_level": log_level,
+        }
+        if pOrder:
+            data["instrument_id"] = pOrder.InstrumentID
+            data["order_ref"] = pOrder.OrderRef
+        self._ee.put(Event(EventType.ORDER_INSERT, data=data))
+
     def OnRtnTrade(self, pTrade):
         self._ee.put(Event(EventType.TRADE, data={
             "instrument_id": pTrade.InstrumentID,
