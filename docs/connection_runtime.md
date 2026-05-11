@@ -2,115 +2,106 @@
 
 ## Purpose
 
-本文档定义 CTP 连接守护的运行规则，用于约束 `main.py` 的守护调度逻辑。
+This document defines the runtime rules for automatic gateway connection management.
 
-核心原则：
+The design is backend-agnostic:
 
-1. `MdGateway` / `TdGateway` 只负责 CTP 适配与交易接口调用。
-2. 自动连接、自动重连、盘前预连接、盘后停止重连等策略由守护入口统一负责。
-3. 守护逻辑第一版放在 `main.py`，但交易时间判断应保持为可测试的纯函数。
-
-## Connection Window
-
-以下时间窗口表示“允许主动建立连接，且断线后允许自动重连”的时间段：
-
-### Day Session
-
-- Start: `08:56`
-- End: `15:01`
-
-### Night Session
-
-- Start: `20:56`
-- End: `02:45`
-
-## Weekly Rules
-
-### Monday Early Morning
-
-- 周一凌晨 `00:00 - 02:45` 不属于上一个交易日夜盘延续。
-- 因此周一凌晨不应自动连接，也不应自动重连。
-
-### Weekday Day Session
-
-- 周一到周五白盘窗口 `08:56 - 15:01` 允许连接。
-
-### Monday To Thursday Night Session
-
-- 周一到周四晚间 `20:56 - 23:59:59` 允许连接。
-- 对应次日凌晨 `00:00 - 02:45` 也允许连接。
-
-### Friday Night Session
-
-- 周五晚间 `20:56 - 23:59:59` 允许连接。
-- 周六凌晨 `00:00 - 02:45` 也允许连接。
-
-### Weekend
-
-- 周六 `02:45` 之后至周一 `08:56` 前，不应主动连接。
-- 此期间若已被动断开，不应自动重连。
-
-## Runtime Policy
-
-### Pre-open Connect
-
-- 在连接窗口开始后，如果网关尚未连接，守护逻辑应主动尝试连接。
-- 白盘采用 `08:56` 提前连接。
-- 夜盘采用 `20:56` 提前连接。
-
-### In-session Reconnect
-
-- 目标设计：在连接窗口内，如果网关被动断开，守护逻辑可以自动重连。
-- 目标设计：`TdGateway` 重连后沿用原有认证/登录流程。
-- 目标设计：`MdGateway` 重连登录成功后，应恢复此前订阅的合约列表。
-
-### Post-session Behavior
-
-- 目标设计：盘后不要求守护逻辑主动断开已有连接。
-- 目标设计：如果盘后已经被动断开，则不再自动重连，等待下一个连接窗口。
-
-### Manual Close
-
-- 当前已支持：如果系统被显式关闭，守护逻辑不应再次自动拉起网关。
+- `MdGateway` / `TdGateway` may be backed by `TTS` or `CTP`
+- runtime connection policy should not care which backend is active
+- backend selection is handled by `TRADE_MODE` and `src/gateway/_ctp_backend.py`
 
 ## Responsibility Boundary
 
 ### Gateway Layer
 
-`src/gateway/` 只负责：
+`src/gateway/` is responsible for:
 
 1. `connect()` / `close()` / `login()` / `authenticate()`
 2. `subscribe()` / `send_order()` / `cancel_order()` / `query_*`
-3. CTP SPI 回调转 `EventEngine` 事件
-4. 维护最小运行状态，如 `status`、`front_id`、`session_id`
+3. translating backend callbacks into `EventEngine` events
+4. maintaining minimal runtime state such as `status`, `front_id`, `session_id`
 
-不负责：
+`src/gateway/` is not responsible for:
 
-1. 交易时段判断
-2. 是否允许重连的策略决策
-3. 盘前预连接
-4. 盘后停止重连
+1. trading-session window judgment
+2. reconnection policy
+3. pre-open connection timing
+4. post-session reconnection suppression
 
-### Main Runtime
+### Runtime Layer
 
-`main.py` 当前已实现：
+[src/main.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/main.py) owns:
 
-1. 根据时间窗口决定是否主动连接未连接网关
-2. 在 `CONNECTING` 卡住超过超时时间后重试连接
-3. 在显式 `stop()` 后停止自动连接
+1. deciding whether the current time is inside a connection window
+2. deciding when disconnected gateways should be connected
+3. deciding when stuck `CONNECTING` gateways should be retried
+4. stopping automatic connection after explicit shutdown
 
-`src/main.py` 目标设计：
+## Connection Window
 
-1. 创建 `EventEngine`、`MdGateway`、`TdGateway`
-2. 周期性检查当前时间是否处于连接窗口
-3. 在允许连接时主动连接未连接网关
-4. 在连接窗口内处理断线后的重连决策
-5. 在非连接窗口内停止自动重连
+Allowed proactive connection window:
+
+### Day Session
+
+- start: `08:56`
+- end: `15:01`
+
+### Night Session
+
+- start: `20:56`
+- end: `02:45`
+
+## Weekly Rules
+
+### Monday Early Morning
+
+- Monday `00:00 - 02:45` is not treated as an extension of the previous trading day
+- automatic connect or reconnect should not happen in that window
+
+### Weekday Day Session
+
+- Monday to Friday `08:56 - 15:01` allows active connection attempts
+
+### Monday To Thursday Night Session
+
+- Monday to Thursday `20:56 - 23:59:59` allows active connection attempts
+- the following day `00:00 - 02:45` also allows reconnect
+
+### Friday Night Session
+
+- Friday `20:56 - 23:59:59` allows active connection attempts
+- Saturday `00:00 - 02:45` also allows reconnect
+
+### Weekend
+
+- after Saturday `02:45` until Monday `08:56`, runtime should not proactively connect
+- if a gateway disconnects during that interval, runtime should not reconnect it
+
+## Runtime Policy
+
+### Pre-open Connect
+
+- when entering a valid connection window, disconnected gateways may be connected proactively
+- current guard behavior uses `08:56` and `20:56` as pre-open thresholds
+
+### In-session Reconnect
+
+- while inside a valid connection window, a disconnected gateway may be reconnected automatically
+- if a gateway remains in `CONNECTING` for too long, runtime may retry connect
+
+### Post-session Behavior
+
+- runtime does not need to force-close healthy connections immediately after the session
+- if a gateway disconnects outside the connection window, runtime should not reconnect until the next valid window
+
+### Manual Stop
+
+- after explicit `stop()`, runtime should not automatically reconnect gateways again
 
 ## Testing Strategy
 
-测试分三层：
+Tests should stay split across three layers:
 
-1. `trading_time` 纯函数测试：验证交易时间边界。
-2. `main.py` 守护逻辑测试：验证何时连接、何时不重连。
-3. `gateway` 适配层测试：验证底层回调与请求，不再验证“自行自动重连”。
+1. `trading_time` pure-function tests
+2. `RuntimeGuard` behavior tests in [test_main.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/test_main.py)
+3. gateway tests that validate callbacks and requests, not runtime reconnection strategy
