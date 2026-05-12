@@ -1,4 +1,6 @@
 """Step 5: StrategyRuntime 测试"""
+from decimal import Decimal
+
 import pytest
 from unittest.mock import MagicMock, call
 
@@ -7,7 +9,7 @@ from src.strategy.runtime import StrategyRuntime
 from src.strategy.base import BaseStrategy, StrategyStatus
 from src.strategy.unit import RealUnit, SyntheticUnit
 from src.common.exchange import Exchange
-from src.common.contract import Contract
+from src.common.contract import Contract, parse_year_month
 
 
 class DummyStrategy(BaseStrategy):
@@ -34,7 +36,16 @@ class SpyStrategy(BaseStrategy):
 
 
 def make_real_unit(inst_id):
-    c = Contract.from_ctp(inst_id, Exchange.SHFE)
+    year, month, product_id = parse_year_month(inst_id)
+    c = Contract(
+        instrument_id=inst_id,
+        exchange=Exchange.SHFE,
+        product_id=product_id,
+        year=year,
+        month=month,
+        multiplier=10,
+        price_tick=Decimal("1"),
+    )
     return RealUnit(inst_id, c, {})
 
 
@@ -304,7 +315,23 @@ class TestStrategyRuntimeEventRouting:
                 self.ticks.append((tick["instrument_id"], tick["synthetic_price"], unit.instrument_id))
 
         s = TickTrackingStrategy("test_strat")
-        components = [Contract.from_ctp("rb2501", Exchange.SHFE), Contract.from_ctp("rb2510", Exchange.SHFE)]
+        components = [Contract(
+            instrument_id="rb2501",
+            exchange=Exchange.SHFE,
+            product_id="rb",
+            year=25,
+            month=1,
+            multiplier=10,
+            price_tick=Decimal("1"),
+        ), Contract(
+            instrument_id="rb2510",
+            exchange=Exchange.SHFE,
+            product_id="rb",
+            year=25,
+            month=10,
+            multiplier=10,
+            price_tick=Decimal("1"),
+        )]
         unit = SyntheticUnit("spread", components, [1.0, -1.0], {})
         s.add_unit(unit)
         engine.register(s)

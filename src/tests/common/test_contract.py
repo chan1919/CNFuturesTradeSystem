@@ -1,84 +1,132 @@
+from decimal import Decimal
+
 import pytest
-from src.common.exchange import Exchange
+
+from src.common.commission import CommissionModel, CommissionRate, CommissionRule, CommissionType
 from src.common.contract import Contract
+from src.common.exchange import Exchange
 
 
-class TestExchangeEnum:
-    def test_exchange_values(self):
-        assert Exchange.SHFE.value == "SHFE"
-        assert Exchange.DCE.value == "DCE"
-        assert Exchange.CZCE.value == "CZCE"
-        assert Exchange.CFFEX.value == "CFFEX"
-        assert Exchange.INE.value == "INE"
-        assert Exchange.GFEX.value == "GFEX"
+def _rb2510() -> Contract:
+    return Contract(
+        instrument_id="rb2510",
+        exchange=Exchange.SHFE,
+        product_id="rb",
+        year=25,
+        month=10,
+        multiplier=10,
+        price_tick=Decimal("1"),
+    )
 
 
-class TestContractFromCtp:
-    def test_from_ctp_shfe(self):
-        c = Contract.from_ctp("rb2510", Exchange.SHFE)
+class TestContract:
+    def test_constructor(self):
+        c = _rb2510()
         assert c.instrument_id == "rb2510"
         assert c.exchange == Exchange.SHFE
         assert c.product_id == "rb"
-        assert c.year_month == "2510"
         assert c.year == 25
         assert c.month == 10
+        assert c.multiplier == 10
+        assert c.price_tick == Decimal("1")
+        assert c.commission is None
 
-    def test_from_ctp_czce(self):
-        c = Contract.from_ctp("CF609", Exchange.CZCE)
-        assert c.instrument_id == "CF609"
-        assert c.product_id == "CF"
-        assert c.year_month == "2609"
-        assert c.year == 26
-        assert c.month == 9
-
-    def test_from_ctp_dce(self):
-        c = Contract.from_ctp("m2605", Exchange.DCE)
-        assert c.instrument_id == "m2605"
-        assert c.product_id == "m"
-        assert c.year_month == "2605"
-        assert c.year == 26
-        assert c.month == 5
-
-    def test_from_ctp_cffex(self):
-        c = Contract.from_ctp("IF2601", Exchange.CFFEX)
-        assert c.instrument_id == "IF2601"
-        assert c.product_id == "IF"
-
-    def test_from_ctp_invalid_exchange_raises(self):
-        with pytest.raises(ValueError):
-            Contract.from_ctp("UNKNOWN", None)
-
-    def test_czce_full_examples(self):
-        cases = [
-            ("CF609", Exchange.CZCE, "CF", "2609"),
-            ("SR601", Exchange.CZCE, "SR", "2601"),
-            ("TA605", Exchange.CZCE, "TA", "2605"),
-            ("MA610", Exchange.CZCE, "MA", "2610"),
-        ]
-        for ctp_id, exch, expected_product, expected_ym in cases:
-            c = Contract.from_ctp(ctp_id, exch)
-            assert c.product_id == expected_product, f"{ctp_id} -> product {expected_product}"
-            assert c.year_month == expected_ym, f"{ctp_id} -> year_month {expected_ym}"
     def test_repr(self):
-        c = Contract.from_ctp("rb2510", Exchange.SHFE)
-        assert repr(c) == "<Contract rb2510 SHFE>"
+        c = _rb2510()
+        assert repr(c) == "Contract(instrument_id='rb2510', exchange=<Exchange.SHFE: 'SHFE'>, " \
+                          "product_id='rb', year=25, month=10, multiplier=10, " \
+                          "price_tick=Decimal('1'), commission=None)"
 
     def test_str(self):
-        c = Contract.from_ctp("m2609", Exchange.DCE)
-        assert str(c) == "m2609"
+        c = _rb2510()
+        assert str(c) == "rb2510"
 
-    def test_eq_same_contract(self):
-        c1 = Contract.from_ctp("rb2510", Exchange.SHFE)
-        c2 = Contract.from_ctp("rb2510", Exchange.SHFE)
-        assert c1 == c2
+    def test_eq_same(self):
+        assert _rb2510() == _rb2510()
 
-    def test_eq_different_contract(self):
-        c1 = Contract.from_ctp("rb2510", Exchange.SHFE)
-        c2 = Contract.from_ctp("rb2601", Exchange.SHFE)
-        assert c1 != c2
+    def test_eq_different(self):
+        a = _rb2510()
+        b = Contract(
+            instrument_id="m2609",
+            exchange=Exchange.DCE,
+            product_id="m",
+            year=26,
+            month=9,
+            multiplier=10,
+            price_tick=Decimal("1"),
+        )
+        assert a != b
 
     def test_hashable(self):
-        c1 = Contract.from_ctp("rb2510", Exchange.SHFE)
-        c2 = Contract.from_ctp("rb2510", Exchange.SHFE)
-        s = {c1, c2}
+        s = {_rb2510(), _rb2510()}
         assert len(s) == 1
+
+    def test_with_commission(self):
+        cm = CommissionModel(
+            open_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_today_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+        )
+        c = Contract(
+            instrument_id="rb2510",
+            exchange=Exchange.SHFE,
+            product_id="rb",
+            year=25,
+            month=10,
+            multiplier=10,
+            price_tick=Decimal("1"),
+            commission=cm,
+        )
+        assert c.commission is cm
+
+
+class TestCommissionRate:
+    def test_fixed_calculate(self):
+        cr = CommissionRate(CommissionType.FIXED, Decimal("10"))
+        assert cr.calculate(Decimal("3500"), 10, 5) == Decimal("50")
+
+    def test_ratio_calculate(self):
+        cr = CommissionRate(CommissionType.RATIO, Decimal("0.00005"))
+        assert cr.calculate(Decimal("3500"), 10, 5) == Decimal("8.75")
+
+    def test_fixed_repr(self):
+        cr = CommissionRate(CommissionType.FIXED, Decimal("10"))
+        assert repr(cr) == "10元/手"
+
+    def test_ratio_repr(self):
+        cr = CommissionRate(CommissionType.RATIO, Decimal("0.00005"))
+        assert repr(cr) == "0.50万分之"
+
+
+class TestCommissionModelCost:
+    def test_open_fixed(self):
+        cm = CommissionModel(
+            open_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_today_commission=CommissionRate(CommissionType.FIXED, Decimal("5")),
+        )
+        assert cm.cost("open", Decimal("3500"), 10, 2) == Decimal("20")
+
+    def test_close_uses_close_rate(self):
+        cm = CommissionModel(
+            open_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_today_commission=CommissionRate(CommissionType.FIXED, Decimal("5")),
+        )
+        assert cm.cost("close", Decimal("3500"), 10, 2) == Decimal("20")
+
+    def test_close_today_uses_close_today_rate(self):
+        cm = CommissionModel(
+            open_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_commission=CommissionRate(CommissionType.FIXED, Decimal("10")),
+            close_today_commission=CommissionRate(CommissionType.FIXED, Decimal("5")),
+        )
+        assert cm.cost("close_today", Decimal("3500"), 10, 2) == Decimal("10")
+
+    def test_open_ratio(self):
+        cm = CommissionModel(
+            open_commission=CommissionRate(CommissionType.RATIO, Decimal("0.00005")),
+            close_commission=CommissionRate(CommissionType.RATIO, Decimal("0.00005")),
+            close_today_commission=CommissionRate(CommissionType.RATIO, Decimal("0.00005")),
+        )
+        assert cm.cost("open", Decimal("3500"), 10, 2) == Decimal("3.5")

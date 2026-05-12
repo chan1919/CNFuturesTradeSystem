@@ -2,10 +2,12 @@
 import pytest
 from unittest.mock import MagicMock
 
+from decimal import Decimal
+
 from src.strategy.unit import AbstractUnit, RealUnit
 from src.common.position import Position
 from src.common.exchange import Exchange
-from src.common.contract import Contract
+from src.common.contract import Contract, parse_year_month
 
 
 class DummyUnit(AbstractUnit):
@@ -20,7 +22,16 @@ class DummyUnit(AbstractUnit):
 
 
 def make_contract(instrument_id="rb2510", exchange=Exchange.SHFE):
-    return Contract.from_ctp(instrument_id, exchange)
+    year, month, product_id = parse_year_month(instrument_id)
+    return Contract(
+        instrument_id=instrument_id,
+        exchange=exchange,
+        product_id=product_id,
+        year=year,
+        month=month,
+        multiplier=10,
+        price_tick=Decimal("1"),
+    )
 
 
 class TestAbstractUnitInit:
