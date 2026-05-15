@@ -39,8 +39,15 @@ CNFuturesTradeSystem/
 │   ├── strategy/
 │   │   ├── base.py
 │   │   ├── runtime.py
-│   │   ├── unit.py
-│   │   └── examples/
+│   │   └── unit.py
+│   ├── messenger/                   ← IM 交互层
+│   │   ├── base.py
+│   │   ├── router.py
+│   │   ├── context.py
+│   │   ├── bridge.py
+│   │   ├── webhook_server.py
+│   │   ├── adapters/
+│   │   └── commands/
 │   ├── tests/
 │   │   ├── common/
 │   │   ├── event_bus/
@@ -86,9 +93,21 @@ CNFuturesTradeSystem/
 - [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): 策略基类，负责 unit 管理与事件路由
 - [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册、启动、停止与事件接入
 
-## Strategy Status
+### `src/messenger`
 
-当前已经落地：
+> 设计阶段，尚未实现。架构细节见 [messenger_architecture.md](C:/Users/suoni/Desktop/CNFuturesTradeSystem/docs/messenger_architecture.md)。
+
+- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/base.py): `BotAdapter` 抽象基类 + `Message` 通用消息结构
+- [router.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/router.py): `CommandRouter` 命令路由（正则匹配 → handler）
+- [context.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/context.py): `BotContext` 持有 TdGateway / MdGateway / Runtime 引用
+- [bridge.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/bridge.py): `MessengerBridge` 将 EventBus 事件推送到 IM 平台
+- [webhook_server.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/webhook_server.py): 极简 FastAPI 实例（单路由 `/webhook/{platform}`）
+- [adapters/](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/adapters/): 飞书 / 钉钉 / Telegram 平台适配器
+- [commands/](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/messenger/commands/): 交易命令实现（`/position`, `/order`, `/account` 等）
+
+## 策略模块状态
+
+当前已落地：
 
 - `Position`
 - `AbstractUnit` / `RealUnit` / `SyntheticUnit`
@@ -102,7 +121,20 @@ CNFuturesTradeSystem/
 - Bar / BarBuilder / BarCache
 - IndicatorService
 - OrderManager
-- 示例策略和全链路策略集成
+
+## Messenger 层状态
+
+设计阶段，尚未实现。详见 [docs/messenger_architecture.md](C:/Users/suoni/Desktop/CNFuturesTradeSystem/docs/messenger_architecture.md)。
+
+后续路线：
+
+1. 抽象层 (base / router / context) — 与平台无关，可立即测试
+2. Telegram 适配器 — API 最简单，最快验证闭环
+3. 查询命令 (/position, /account) — 只读，安全
+4. MessengerBridge — EventBus → IM 推送
+5. 交易命令 (/order, /cancel)
+6. webhook_server — 最小 FastAPI
+7. 飞书 / 钉钉 适配器
 
 ## Test Layout
 
@@ -166,6 +198,15 @@ python -m pytest -m "gateway and live_trade_window"
 ```powershell
 pip install openctp-ctp openctp-tts python-dotenv pytest
 ```
+
+Messenger 层额外依赖：
+
+```powershell
+pip install fastapi uvicorn httpx
+```
+
+- `fastapi` + `uvicorn`: webhook server（仅使用 IM 长轮询模式时不需要）
+- `httpx`: 调用各 IM 平台的 SendMessage API
 
 如果本地没有 `openctp_tts`，代码会回退到 `openctp_ctp`，但默认开发流程不建议依赖这个回退。
 
