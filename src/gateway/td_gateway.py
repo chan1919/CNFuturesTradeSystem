@@ -183,6 +183,12 @@ class TdGateway(BaseGateway):
         req.InvestorID = self._investor_id or self._user_id
         self._api.ReqQryInvestorPosition(req, 0)
 
+    def query_instruments(self):
+        if self.status != GatewayStatus.LOGINED:
+            raise RuntimeError("TdGateway: not logined, cannot query")
+        req = tdapi.CThostFtdcQryInstrumentField()
+        self._api.ReqQryInstrument(req, 0)
+
     def query_account(self):
         if self.status != GatewayStatus.LOGINED:
             raise RuntimeError("TdGateway: not logined, cannot query")
@@ -334,6 +340,19 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 "frozen_cash": pTradingAccount.FrozenCash,
                 "position_profit": pTradingAccount.PositionProfit,
                 "commission": pTradingAccount.Commission,
+                "log_level": "info",
+            }))
+
+    def OnRspQryInstrument(self, pInstrument, pRspInfo, nRequestID, bIsLast):
+        if pInstrument:
+            self._ee.put(Event(EventType.QRV_INSTRUMENT, data={
+                "instrument_id": pInstrument.InstrumentID,
+                "exchange_id": pInstrument.ExchangeID,
+                "product_id": pInstrument.ProductID,
+                "product_class": pInstrument.ProductClass,
+                "volume_multiple": pInstrument.VolumeMultiple,
+                "price_tick": pInstrument.PriceTick,
+                "is_trading": pInstrument.IsTrading,
                 "log_level": "info",
             }))
 

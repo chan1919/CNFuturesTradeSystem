@@ -3,8 +3,6 @@ from dataclasses import dataclass
 
 @dataclass
 class Position:
-    """单合约持仓模型 — 多空分列（匹配 CTP 双向持仓）"""
-
     instrument_id: str
 
     long_yd: int = 0
@@ -57,3 +55,58 @@ class Position:
             self.short_today = today
             self.short_frozen = frozen
             self.short_avg_price = avg_price if avg_price else self.short_avg_price
+
+    def apply_trade(self, direction: str, offset: str, volume: int, price: float):
+        direction = _normalize_direction(direction)
+        offset = _normalize_offset(offset)
+
+        if direction == "buy":
+            if offset == "open":
+                self.long_today += volume
+                total = self.long_avg_price * (self.long_volume - volume)
+                self.long_avg_price = (total + price * volume) / self.long_volume if self.long_volume else price
+            else:
+                self.short_yd, self.short_today = _reduce_position(
+                    self.short_yd, self.short_today, volume, offset
+                )
+        elif direction == "sell":
+            if offset == "open":
+                self.short_today += volume
+                total = self.short_avg_price * (self.short_volume - volume)
+                self.short_avg_price = (total + price * volume) / self.short_volume if self.short_volume else price
+            else:
+                self.long_yd, self.long_today = _reduce_position(
+                    self.long_yd, self.long_today, volume, offset
+                )
+
+
+def _normalize_direction(direction: str) -> str:
+    return {
+        "0": "buy",
+        "1": "sell",
+    }.get(direction, direction)
+
+
+def _normalize_offset(offset: str) -> str:
+    return {
+        "0": "open",
+        "1": "close",
+        "3": "close_today",
+        "4": "close_yesterday",
+    }.get(offset, offset)
+
+
+def _reduce_position(yd: int, today: int, volume: int, offset: str) -> tuple[int, int]:
+    if volume <= 0:
+        return yd, today
+
+    if offset == "close_today":
+        return yd, max(0, today - volume)
+
+    if offset == "close_yesterday":
+        return max(0, yd - volume), today
+
+    yd_used = min(yd, volume)
+    yd -= yd_used
+    today -= min(today, volume - yd_used)
+    return yd, today

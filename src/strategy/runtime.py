@@ -8,8 +8,12 @@ class StrategyRuntime:
         self.td_gateway = td_gateway
         self.md_gateway = md_gateway
         self.strategies: dict[str, BaseStrategy] = {}
-        self._order_handlers: dict[str, callable] = {}
-        self._trade_handlers: dict[str, callable] = {}
+        self._order_ref_to_strategy: dict[str, str] = {}
+        self._instrument_to_strategies: dict[str, list[BaseStrategy]] = {}
+        self._tick_handler = None
+        self._order_handler = None
+        self._trade_handler = None
+        self._account_handler = None
 
     # ── 策略管理 ──
 
@@ -17,16 +21,23 @@ class StrategyRuntime:
         strategy.runtime = self
         strategy.on_init()
         self.strategies[strategy.name] = strategy
+        for iid in strategy.subscribed_instrument_ids():
+            self._instrument_to_strategies.setdefault(iid, []).append(strategy)
 
     def unregister(self, name: str):
-        s = self.get(name)
+        s = self.strategies.pop(name, None)
         if s is None:
             return
         if s.status == StrategyStatus.RUNNING:
-            self.stop(name)
+            self._stop(s)
         else:
             s.on_stop()
-        self.strategies.pop(name, None)
+        for iid in s.subscribed_instrument_ids():
+            listeners = self._instrument_to_strategies.get(iid, [])
+            if s in listeners:
+                listeners.remove(s)
+            if not listeners:
+                self._instrument_to_strategies.pop(iid, None)
 
     def get(self, name: str) -> BaseStrategy | None:
         return self.strategies.get(name)
@@ -34,22 +45,20 @@ class StrategyRuntime:
     def list_names(self) -> list[str]:
         return list(self.strategies.keys())
 
+    def list_by_tag(self, tag: str) -> list[BaseStrategy]:
+        return [s for s in self.strategies.values() if tag in s.tags]
+
     # ── 生命周期 ──
 
     def start(self, name: str):
         s = self.get(name)
         if not s or s.status != StrategyStatus.STOPPED:
             return
+        self._ensure_running()
         s.status = StrategyStatus.STARTING
-        self.event_bus.register(EventType.TICK, s._route_tick)
-        self.event_bus.register(EventType.POSITION, s._route_position)
-        self.event_bus.register(EventType.ACCOUNT, s._route_account)
-        self._order_handlers[name] = self._make_on_order(s)
-        self._trade_handlers[name] = self._make_on_trade(s)
-        self.event_bus.register(EventType.ORDER, self._order_handlers[name])
-        self.event_bus.register(EventType.TRADE, self._trade_handlers[name])
-        for unit in s.units.values():
-            unit.subscribe_market(self.md_gateway)
+        s.enable()
+        for iid in s.subscribed_instrument_ids():
+            self.md_gateway.subscribe(iid)
         s.on_start()
         s.status = StrategyStatus.RUNNING
 
@@ -57,15 +66,15 @@ class StrategyRuntime:
         s = self.get(name)
         if not s or s.status != StrategyStatus.RUNNING:
             return
-        s.status = StrategyStatus.STOPPING
-        s.on_stop()
-        self.event_bus.unregister(EventType.TICK, s._route_tick)
-        self.event_bus.unregister(EventType.POSITION, s._route_position)
-        self.event_bus.unregister(EventType.ACCOUNT, s._route_account)
-        if name in self._order_handlers:
-            self.event_bus.unregister(EventType.ORDER, self._order_handlers.pop(name))
-        if name in self._trade_handlers:
-            self.event_bus.unregister(EventType.TRADE, self._trade_handlers.pop(name))
+        self._stop(s)
+
+    def start_by_tag(self, tag: str):
+        for s in self.list_by_tag(tag):
+            self.start(s.name)
+
+    def stop_by_tag(self, tag: str):
+        for s in self.list_by_tag(tag):
+            self.stop(s.name)
 
     def start_all(self):
         for name in self.list_names():
@@ -75,22 +84,93 @@ class StrategyRuntime:
         for name in self.list_names():
             self.stop(name)
 
+    # ── 聚合查询 ──
+
+    def positions_by_tag(self, tag: str) -> dict[str, list]:
+        result = {}
+        for s in self.list_by_tag(tag):
+            for iid, pos in s.positions.items():
+                result.setdefault(iid, []).append(pos)
+        return result
+
+    def trades_by_tag(self, tag: str) -> list[dict]:
+        result = []
+        for s in self.list_by_tag(tag):
+            result.extend(s.trades.values())
+        return result
+
+    # ── 下单 ──
+
+    def send_order_for_strategy(self, strategy: BaseStrategy, instrument_id: str,
+                                direction: str, offset: str, price: float, volume: int):
+        order_ref = self.td_gateway.send_order(instrument_id, direction, offset, price, volume)
+        self._order_ref_to_strategy[order_ref] = strategy.name
+        return order_ref
+
     # ── 内部 ──
 
-    def _make_on_order(self, strategy):
-        def handler(event):
-            order = event.data
-            unit = strategy.get_unit(order.get("instrument_id", ""))
-            if unit:
-                unit.on_order(event)
-                strategy.on_order(order, unit)
-        return handler
+    def _ensure_running(self):
+        if self._tick_handler is not None:
+            return
+        self._tick_handler = self._on_tick
+        self._order_handler = self._on_order
+        self._trade_handler = self._on_trade
+        self._account_handler = self._on_account
+        self.event_bus.register(EventType.TICK, self._tick_handler)
+        self.event_bus.register(EventType.ORDER, self._order_handler)
+        self.event_bus.register(EventType.TRADE, self._trade_handler)
+        self.event_bus.register(EventType.ACCOUNT, self._account_handler)
 
-    def _make_on_trade(self, strategy):
-        def handler(event):
-            trade = event.data
-            unit = strategy.get_unit(trade.get("instrument_id", ""))
-            if unit:
-                unit.on_trade(event)
-                strategy.on_trade(trade, unit)
-        return handler
+    def _stop(self, strategy: BaseStrategy):
+        strategy.status = StrategyStatus.STOPPING
+        strategy.on_stop()
+        strategy.status = StrategyStatus.STOPPED
+
+    def _on_tick(self, event):
+        tick = event.data
+        iid = tick.get("instrument_id", "")
+        for s in self._instrument_to_strategies.get(iid, []):
+            if not s.enabled or s.status != StrategyStatus.RUNNING:
+                continue
+            s.latest_ticks[iid] = tick
+            if s.positions.get(iid):
+                s.positions[iid].last_price = tick.get("last_price", 0)
+            s.on_tick(tick)
+
+    def _on_order(self, event):
+        order = event.data
+        order_ref = order.get("order_ref", "")
+        strategy_name = self._order_ref_to_strategy.get(order_ref)
+        if strategy_name is None:
+            return
+        s = self.strategies.get(strategy_name)
+        if s is None:
+            return
+        s.orders[order_ref] = order
+        s.on_order(order)
+
+    def _on_trade(self, event):
+        trade = event.data
+        order_ref = trade.get("order_ref", "")
+        strategy_name = self._order_ref_to_strategy.get(order_ref)
+        if strategy_name is None:
+            return
+        s = self.strategies.get(strategy_name)
+        if s is None:
+            return
+        iid = trade.get("instrument_id", "")
+        trade_id = trade.get("trade_id", "")
+        s.trades[trade_id or str(len(s.trades))] = trade
+        pos = s.positions.get(iid)
+        if pos:
+            pos.apply_trade(
+                direction=trade.get("direction", ""),
+                offset=trade.get("offset_flag", ""),
+                volume=trade.get("volume", 0),
+                price=float(trade.get("price", 0)),
+            )
+        s.on_trade(trade)
+
+    def _on_account(self, event):
+        for s in self.strategies.values():
+            s.on_account(event.data)

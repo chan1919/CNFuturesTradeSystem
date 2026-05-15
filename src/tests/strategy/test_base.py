@@ -1,33 +1,22 @@
-"""Step 4: BaseStrategy 测试"""
+from decimal import Decimal
+
 import pytest
 from unittest.mock import MagicMock
 
-from decimal import Decimal
-
 from src.strategy.base import BaseStrategy, StrategyStatus
-from src.strategy.unit import AbstractUnit, RealUnit, SyntheticUnit
 from src.common.position import Position
 from src.common.exchange import Exchange
-from src.common.contract import Contract, parse_year_month
+from src.common.contract import Contract
 
 
 def make_contract(symbol, exchange=Exchange.SHFE):
-    year, month, product_id = parse_year_month(symbol)
     return Contract(
         instrument_id=symbol,
         exchange=exchange,
-        product_id=product_id,
-        year=year,
-        month=month,
+        product_id=symbol.rstrip("0123456789"),
         multiplier=10,
         price_tick=Decimal("1"),
     )
-
-
-def make_real_unit(inst_id, contract=None, params=None):
-    c = contract or make_contract(inst_id)
-    p = params or {}
-    return RealUnit(inst_id, c, p)
 
 
 class DummyStrategy(BaseStrategy):
@@ -44,339 +33,158 @@ class TestStrategyInit:
         s = DummyStrategy("test_strat")
         assert s.status == StrategyStatus.STOPPED
 
-    def test_init_has_empty_units(self):
+    def test_init_has_empty_contracts(self):
         s = DummyStrategy("test_strat")
-        assert s.units == {}
+        assert s.contracts == {}
 
-
-class TestStrategyUnitManagement:
-    def test_add_unit_stores_by_instrument_id(self):
+    def test_tags_default_empty(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        s.add_unit(u)
-        assert "rb2501" in s.units
-        assert s.units["rb2501"] is u
+        assert s.tags == set()
 
-    def test_add_multiple_units(self):
+    def test_enabled_defaults_true(self):
         s = DummyStrategy("test_strat")
-        u1 = make_real_unit("rb2501")
-        u2 = make_real_unit("rb2510")
-        s.add_unit(u1)
-        s.add_unit(u2)
-        assert len(s.units) == 2
+        assert s.enabled is True
 
-    def test_get_unit_returns_none_for_missing(self):
+
+class TestStrategyAddContract:
+    def test_add_contract_stores_by_instrument_id(self):
         s = DummyStrategy("test_strat")
-        assert s.get_unit("nonexistent") is None
+        c = make_contract("rb2501")
+        s.add_contract(c)
+        assert "rb2501" in s.contracts
+        assert s.contracts["rb2501"] is c
 
-    def test_get_unit_returns_unit_when_present(self):
+    def test_add_contract_creates_position(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        s.add_unit(u)
-        assert s.get_unit("rb2501") is u
+        c = make_contract("rb2501")
+        s.add_contract(c)
+        assert "rb2501" in s.positions
+        assert isinstance(s.positions["rb2501"], Position)
+        assert s.positions["rb2501"].instrument_id == "rb2501"
 
-    def test_remove_unit_returns_and_disables(self):
+    def test_add_contract_creates_tick_cache(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        u.enable()
-        s.add_unit(u)
+        c = make_contract("rb2501")
+        s.add_contract(c)
+        assert "rb2501" in s.latest_ticks
+        assert s.latest_ticks["rb2501"] == {}
 
-        removed = s.get_unit("rb2501")
-        s.remove_unit("rb2501")
-        assert s.get_unit("rb2501") is None
-        assert removed.enabled is False
-        # verify it was only disabled, not destroyed
-        assert removed.instrument_id == "rb2501"
-
-    def test_list_unit_ids(self):
+    def test_subscribed_instrument_ids_reflects_contracts(self):
         s = DummyStrategy("test_strat")
-        s.add_unit(make_real_unit("rb2501"))
-        s.add_unit(make_real_unit("rb2510"))
-        assert set(s.list_unit_ids()) == {"rb2501", "rb2510"}
+        s.add_contract(make_contract("rb2501"))
+        s.add_contract(make_contract("rb2510"))
+        assert s.subscribed_instrument_ids() == {"rb2501", "rb2510"}
 
 
-class TestStrategyDelegation:
-    def test_enable_delegates_to_unit(self):
+class TestStrategyHelpers:
+    def test_price_returns_last_price(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        s.add_unit(u)
-        s.enable("rb2501")
-        assert u.enabled is True
+        s.latest_ticks["rb2501"] = {"last_price": 3500.0}
+        assert s.price("rb2501") == 3500.0
 
-    def test_disable_delegates_to_unit(self):
+    def test_price_returns_none_when_no_tick(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        u.enable()
-        s.add_unit(u)
-        s.disable("rb2501")
-        assert u.enabled is False
+        assert s.price("rb2501") is None
 
-    def test_update_params_delegates_to_unit(self):
+    def test_has_all_ticks_true_when_all_have_prices(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501", params={"fast": 5})
-        s.add_unit(u)
-        s.update_params("rb2501", {"fast": 10})
-        assert u.params == {"fast": 10}
+        s.latest_ticks["rb2501"] = {"last_price": 3500.0}
+        s.latest_ticks["rb2510"] = {"last_price": 3400.0}
+        assert s.has_all_ticks("rb2501", "rb2510") is True
 
-    def test_restart_delegates_to_unit(self):
+    def test_has_all_ticks_false_when_missing_price(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        s.add_unit(u)
-        s.disable("rb2501")
-        s.restart("rb2501")
-        assert u.enabled is True
-
-
-class TestStrategyPositionQuery:
-    def test_get_all_positions(self):
-        s = DummyStrategy("test_strat")
-        s.add_unit(make_real_unit("rb2501"))
-        s.add_unit(make_real_unit("rb2510"))
-        positions = s.get_all_positions()
-        assert len(positions) == 2
-        assert all(isinstance(p, Position) for p in positions)
-
-    def test_get_positions_for_product(self):
-        s = DummyStrategy("test_strat")
-        c1 = make_contract("rb2501")
-        c2 = make_contract("rb2510")
-        c3 = make_contract("m2609", Exchange.DCE)
-        s.add_unit(make_real_unit("rb2501", c1))
-        s.add_unit(make_real_unit("rb2510", c2))
-        s.add_unit(make_real_unit("m2609", c3))
-
-        rb_positions = s.get_positions_for("rb")
-        assert len(rb_positions) == 2
-
-    def test_get_positions_for_returns_empty_for_no_match(self):
-        s = DummyStrategy("test_strat")
-        s.add_unit(make_real_unit("rb2501"))
-        positions = s.get_positions_for("m")
-        assert positions == []
+        s.latest_ticks["rb2501"] = {"last_price": 3500.0}
+        s.latest_ticks["rb2510"] = {}
+        assert s.has_all_ticks("rb2501", "rb2510") is False
 
 
 class TestStrategyLifecycle:
-    def test_on_start_enables_all_units(self):
+    def test_on_start_does_not_error(self):
         s = DummyStrategy("test_strat")
-        s.add_unit(make_real_unit("rb2501"))
-        s.add_unit(make_real_unit("rb2510"))
         s.on_start()
-        for u in s.units.values():
-            assert u.enabled is True
 
-    def test_on_stop_disables_all_units_and_sets_stopped(self):
+    def test_on_stop_sets_enabled_false_and_stopped(self):
         s = DummyStrategy("test_strat")
-        s.add_unit(make_real_unit("rb2501"))
-        s.add_unit(make_real_unit("rb2510"))
-        s.on_start()
         s.on_stop()
-        for u in s.units.values():
-            assert u.enabled is False
+        assert s.enabled is False
         assert s.status == StrategyStatus.STOPPED
 
-
-class TestStrategyRouteTick:
-    def test_route_tick_to_correct_unit(self):
-        class CaptureStrategy(DummyStrategy):
-            def __init__(self, name):
-                super().__init__(name)
-                self.captured_ticks = []
-
-            def on_tick(self, tick, unit):
-                self.captured_ticks.append((tick, unit.instrument_id))
-
-        s = CaptureStrategy("test_strat")
-        u1 = make_real_unit("rb2501")
-        u2 = make_real_unit("rb2510")
-        u1.enable()
-        u2.enable()
-        s.add_unit(u1)
-        s.add_unit(u2)
-
-        event = MagicMock()
-        event.data = {"instrument_id": "rb2510", "last_price": 3400.0}
-        s._route_tick(event)
-
-        assert len(s.captured_ticks) == 1
-        assert s.captured_ticks[0][0]["last_price"] == 3400.0
-        assert s.captured_ticks[0][1] == "rb2510"
-
-    def test_route_tick_skips_when_unit_not_found(self):
-        class CaptureStrategy(DummyStrategy):
-            def on_tick(self, tick, unit):
-                self.captured_ticks.append(tick)
-
-        s = CaptureStrategy("test_strat")
-        s.captured_ticks = []
-        s.add_unit(make_real_unit("rb2501"))
-
-        event = MagicMock()
-        event.data = {"instrument_id": "rb9999", "last_price": 9999.0}
-        s._route_tick(event)
-        assert len(s.captured_ticks) == 0
-
-    def test_route_tick_skips_when_unit_disabled(self):
-        class CaptureStrategy(DummyStrategy):
-            def on_tick(self, tick, unit):
-                self.captured_ticks.append(tick)
-
-        s = CaptureStrategy("test_strat")
-        s.captured_ticks = []
-        u = make_real_unit("rb2501")
-        s.add_unit(u)
-
-        event = MagicMock()
-        event.data = {"instrument_id": "rb2501", "last_price": 3500.0}
-        s._route_tick(event)
-        assert len(s.captured_ticks) == 0
-
-
-class TestStrategySyntheticUnits:
-    def test_list_synthetic_units_filters_real_units(self):
+    def test_enable_disable_toggle(self):
         s = DummyStrategy("test_strat")
-        s.add_unit(make_real_unit("rb2501"))
-        comps = [make_contract("rb2501"), make_contract("rb2510")]
-        s.add_unit(SyntheticUnit("spread", comps, [1.0, -1.0], {}))
-        synthetics = s.list_synthetic_units()
-        assert len(synthetics) == 1
-        assert isinstance(synthetics[0], SyntheticUnit)
-
-    def test_route_tick_updates_synthetic_unit_from_component_ticks(self):
-        class CaptureStrategy(DummyStrategy):
-            def __init__(self, name):
-                super().__init__(name)
-                self.captured_ticks = []
-
-            def on_tick(self, tick, unit):
-                self.captured_ticks.append((tick, unit.instrument_id))
-
-        s = CaptureStrategy("test_strat")
-        comps = [make_contract("rb2501"), make_contract("rb2510")]
-        synthetic = SyntheticUnit("spread", comps, [1.0, -1.0], {})
-        synthetic.enable()
-        s.add_unit(synthetic)
-
-        first_event = MagicMock()
-        first_event.data = {"instrument_id": "rb2501", "last_price": 3500.0}
-        second_event = MagicMock()
-        second_event.data = {"instrument_id": "rb2510", "last_price": 3400.0}
-
-        s._route_tick(first_event)
-        assert s.captured_ticks == []
-
-        s._route_tick(second_event)
-        assert len(s.captured_ticks) == 1
-        tick, instrument_id = s.captured_ticks[0]
-        assert instrument_id == "spread"
-        assert tick["instrument_id"] == "spread"
-        assert tick["source_instrument_id"] == "rb2510"
-        assert tick["synthetic_price"] == 100.0
-        assert synthetic.position.last_price == 100.0
+        s.disable()
+        assert s.enabled is False
+        s.enable()
+        assert s.enabled is True
 
 
-class TestStrategyRoutePosition:
-    def test_route_position_updates_long_position(self):
+class TestStrategyBuySell:
+    def test_buy_delegates_to_runtime(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        s.add_unit(u)
+        s.runtime = MagicMock()
+        s.buy("rb2501", 3)
+        s.runtime.send_order_for_strategy.assert_called_once_with(s, "rb2501", "buy", "open", 0, 3)
 
-        event = MagicMock()
-        event.data = {
-            "instrument_id": "rb2501",
-            "posi_direction": "2",
-            "yd_position": 5,
-            "today_position": 3,
-        }
-        s._route_position(event)
-        assert u.position.long_yd == 5
-        assert u.position.long_today == 3
-
-    def test_route_position_updates_short_position(self):
+    def test_sell_delegates_to_runtime(self):
         s = DummyStrategy("test_strat")
-        u = make_real_unit("m2609")
-        s.add_unit(u)
+        s.runtime = MagicMock()
+        s.sell("rb2501", 2)
+        s.runtime.send_order_for_strategy.assert_called_once_with(s, "rb2501", "sell", "open", 0, 2)
 
-        event = MagicMock()
-        event.data = {
-            "instrument_id": "m2609",
-            "posi_direction": "3",
-            "yd_position": 2,
-            "today_position": 4,
-        }
-        s._route_position(event)
-        assert u.position.short_yd == 2
-        assert u.position.short_today == 4
-
-    def test_route_position_skips_when_unit_not_found(self):
+    def test_close_long_delegates_to_runtime(self):
         s = DummyStrategy("test_strat")
-        event = MagicMock()
-        event.data = {"instrument_id": "rb9999", "posi_direction": "2", "yd_position": 5}
-        s._route_position(event)  # no error
+        s.runtime = MagicMock()
+        s.close_long("rb2501", 1)
+        s.runtime.send_order_for_strategy.assert_called_once_with(s, "rb2501", "sell", "close", 0, 1)
 
-
-class TestStrategyRouteAccount:
-    def test_route_account_stores_data(self):
+    def test_close_short_delegates_to_runtime(self):
         s = DummyStrategy("test_strat")
-        event = MagicMock()
-        event.data = {"balance": 150000.0, "available": 80000.0}
-        s._route_account(event)
-        assert s._last_account == {"balance": 150000.0, "available": 80000.0}
+        s.runtime = MagicMock()
+        s.close_short("rb2501", 1)
+        s.runtime.send_order_for_strategy.assert_called_once_with(s, "rb2501", "buy", "close", 0, 1)
+
+    def test_buy_with_price(self):
+        s = DummyStrategy("test_strat")
+        s.runtime = MagicMock()
+        s.buy("rb2501", 3, 3510.0)
+        s.runtime.send_order_for_strategy.assert_called_once_with(s, "rb2501", "buy", "open", 3510.0, 3)
 
 
-class TestStrategyTickUpdatesPrice:
-    def test_on_tick_updates_last_price(self):
-        class TrackingStrategy(DummyStrategy):
-            def on_tick(self, tick, unit):
-                pass
+class TestStrategyOnTick:
+    def test_on_tick_is_callable(self):
+        s = DummyStrategy("test_strat")
+        tick = {"instrument_id": "rb2501", "last_price": 3500.0}
+        s.on_tick(tick)
 
-        s = TrackingStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        u.enable()
-        s.add_unit(u)
-
-        event = MagicMock()
-        event.data = {"instrument_id": "rb2501", "last_price": 3555.0}
-        s._route_tick(event)
-        assert u.position.last_price == 3555.0
+    def test_on_tick_skips_unknown_instrument(self):
+        s = DummyStrategy("test_strat")
+        tick = {"instrument_id": "unknown", "last_price": 100.0}
+        s.on_tick(tick)
 
 
-class TestStrategyOrderAndTradeCallbacks:
-    def test_on_order_callback_called(self):
+class TestStrategyOnOrder:
+    def test_on_order_is_callable(self):
+        s = DummyStrategy("test_strat")
+        order = {"order_ref": "123", "instrument_id": "rb2501"}
+        s.on_order(order)
+
+
+class TestStrategyOnTrade:
+    def test_on_trade_is_callable(self):
+        s = DummyStrategy("test_strat")
+        trade = {"trade_id": "t001", "instrument_id": "rb2501"}
+        s.on_trade(trade)
+
+
+class TestStrategyOnAccount:
+    def test_on_account_receives_data(self):
         called = []
 
-        class OStrategy(DummyStrategy):
-            def on_order(self, order, unit):
-                called.append((order["order_ref"], unit.instrument_id))
+        class AccountStrategy(DummyStrategy):
+            def on_account(self, account):
+                called.append(account)
 
-        s = OStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        u.enable()
-        s.add_unit(u)
-
-        event = MagicMock()
-        event.data = {"instrument_id": "rb2501", "order_ref": "5"}
-        u.on_order = lambda e: s.on_order(e.data, u)
-        u.on_order(event)
-
+        s = AccountStrategy("test_strat")
+        s.on_account({"balance": 100000.0})
         assert len(called) == 1
-        assert called[0] == ("5", "rb2501")
-
-    def test_on_trade_callback_called(self):
-        called = []
-
-        class TStrategy(DummyStrategy):
-            def on_trade(self, trade, unit):
-                called.append((trade["trade_id"], unit.instrument_id))
-
-        s = TStrategy("test_strat")
-        u = make_real_unit("rb2501")
-        u.enable()
-        s.add_unit(u)
-
-        event = MagicMock()
-        event.data = {"instrument_id": "rb2501", "trade_id": "t99"}
-        u.on_trade = lambda e: s.on_trade(e.data, u)
-        u.on_trade(event)
-
-        assert len(called) == 1
-        assert called[0] == ("t99", "rb2501")
+        assert called[0]["balance"] == 100000.0

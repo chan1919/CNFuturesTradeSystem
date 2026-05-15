@@ -38,8 +38,7 @@ CNFuturesTradeSystem/
 │   │   └── td_gateway.py
 │   ├── strategy/
 │   │   ├── base.py
-│   │   ├── runtime.py
-│   │   └── unit.py
+│   │   └── runtime.py
 │   ├── messenger/                   ← IM 交互层
 │   │   ├── base.py
 │   │   ├── router.py
@@ -70,8 +69,8 @@ CNFuturesTradeSystem/
 ### `src/common`
 
 - [config.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/config.py): 统一读取 `.env`，根据 `TRADE_MODE` 选择 `TTS_*` 或 `CTP_*`
-- [contract.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/contract.py): 合约模型，保留 CTP 原生 `instrument_id`
-- [position.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/position.py): 单合约持仓，多空分列
+- [contract.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/contract.py): 合约模型，保留 CTP 原生 `instrument_id`，不做解析
+- [position.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/position.py): 单合约持仓，多空分列，支持 `update_from_ctp` 和 `apply_trade`
 - [trading_time.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/trading_time.py): 连接时间窗口判断
 
 ### `src/event_bus`
@@ -89,9 +88,8 @@ CNFuturesTradeSystem/
 
 ### `src/strategy`
 
-- [unit.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/unit.py): `AbstractUnit` / `RealUnit` / `SyntheticUnit`
-- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): 策略基类，负责 unit 管理与事件路由
-- [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册、启动、停止与事件接入
+- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): `BaseStrategy` 策略基类，直接管理合约、仓位、tick 缓存，提供下单辅助方法（`buy`/`sell`/`close_long`/`close_short`）
+- [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册/启动/停止、tick 按合约路由、order/trade 按 order_ref 路由、tag 批量控制
 
 ### `src/messenger`
 
@@ -109,12 +107,10 @@ CNFuturesTradeSystem/
 
 当前已落地：
 
-- `Position`
-- `AbstractUnit` / `RealUnit` / `SyntheticUnit`
-- `BaseStrategy`
-- `StrategyRuntime`
-- synthetic tick 经腿合约驱动
-- strategy 级 `on_order` / `on_trade` 回调
+- `Position` — 多空分列持仓模型，支持 CTP query 和成交回报更新
+- `Contract` — CTP 原生合约元数据，不做解析
+- `BaseStrategy` — 策略即执行体，内置 tick 缓存、仓位管理、下单辅助
+- `StrategyRuntime` — 按策略注册管理，tick/instrument_id 路由，order/trade 按 order_ref 路由，tag 批量控制
 
 尚未完成：
 

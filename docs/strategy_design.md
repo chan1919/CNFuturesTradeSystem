@@ -1,131 +1,153 @@
-# Strategy Module Design
+# 策略架构设计
 
-> Status: implemented core skeleton, still under TDD expansion
+## 核心概念
 
-## Overview
+只保留三个公开核心概念：
 
-The strategy module converts market events into trading actions.
-
-Current design principles:
-
-- `StrategyRuntime` manages strategy lifecycle and event integration
-- each strategy owns multiple units
-- units are the smallest execution elements
-- both real contracts and synthetic contracts are supported
-- strategy-level `on_order` and `on_trade` callbacks are first-class hooks
-
-## Core Roles
-
-### `StrategyRuntime`
-
-Responsibilities:
-
-- register and unregister strategies
-- start and stop strategies
-- subscribe unit market data through `MdGateway`
-- route `ORDER` and `TRADE` events into both unit-level and strategy-level hooks
-
-Current implementation: [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py)
-
-### `BaseStrategy`
-
-Responsibilities:
-
-- manage unit collection
-- expose unit-level commands such as `enable`, `disable`, `update_params`, `restart`
-- aggregate positions
-- route ticks, positions, and account events to the right unit
-- route component ticks into synthetic units through component mapping
-
-Current implementation: [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py)
-
-### `AbstractUnit`
-
-Responsibilities:
-
-- store unit parameters
-- own an independent `Position`
-- define market subscription and tick-processing contract
-
-### `RealUnit`
-
-- one unit for one real exchange contract
-- passes through matching ticks only
-
-### `SyntheticUnit`
-
-- subscribes component contracts
-- caches component prices
-- emits synthetic ticks after all component prices are available
-- `last_price` on the routed synthetic tick is the synthetic price
-- original leg information is preserved as `source_instrument_id` and `source_last_price`
-
-Current implementation: [unit.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/unit.py)
-
-## Event Flow
-
-```text
-MdGateway -> EventBus -> StrategyRuntime -> BaseStrategy._route_tick
-                           -> direct unit match
-                           -> synthetic component listeners
-                           -> unit.on_tick(...)
-                           -> strategy.on_tick(...)
-
-TdGateway ORDER -> EventBus -> StrategyRuntime handler
-                 -> unit.on_order(...)
-                 -> strategy.on_order(...)
-
-TdGateway TRADE -> EventBus -> StrategyRuntime handler
-                 -> unit.on_trade(...)
-                 -> strategy.on_trade(...)
 ```
-
-## Current Data Model
-
-### Position
-
-[position.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/position.py)
-
-- separate long and short sides
-- `long_yd`, `long_today`, `long_avg_price`, `long_frozen`
-- `short_yd`, `short_today`, `short_avg_price`, `short_frozen`
-- `last_price`, `unrealized_pnl`, `realized_pnl`
+Contract   — 真实 CTP 合约元数据
+Strategy   — 既是交易模型，也是执行单元
+Tag        — 策略实例的分组控制维度
+```
 
 ### Contract
 
-[contract.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/common/contract.py)
-
-- preserves native CTP instrument code
-- parses `product_id`, `year`, `month`, `year_month`
-
-## Current Test Coverage
-
-Strategy tests live in:
-
-```text
-src/tests/strategy/
-├── test_base.py
-├── test_runtime.py
-├── test_position.py
-├── test_synthetic.py
-└── test_unit.py
+```python
+@dataclass(frozen=True)
+class Contract:
+    instrument_id: str
+    exchange: Exchange
+    product_id: str
+    multiplier: int
+    price_tick: Decimal
+    commission: Optional[CommissionModel] = None
 ```
 
-Covered behaviors:
+CTP 原生 `instrument_id` 不做任何格式转换或解析。直接使用 CTP 回调中的字段。
 
-- position calculations
-- unit lifecycle
-- synthetic price calculation
-- strategy event routing
-- strategy-level order/trade callbacks
-- strategy unregister cleanup
+### Strategy
 
-## Remaining Roadmap
+策略实例 = 执行单元。每个实例自己订阅合约、收 tick、维护仓位、下单、处理回报。
 
-Planned next steps:
+```python
+class BaseStrategy:
+    name: str
+    tags: set[str]
+    contracts: dict[str, Contract]
+    positions: dict[str, Position]
+    latest_ticks: dict[str, dict]
+    orders: dict[str, dict]
+    trades: dict[str, dict]
+    enabled: bool
 
-1. Bar / BarBuilder / BarCache
-2. IndicatorService
-3. OrderManager
-4. example strategies
-5. full strategy-to-gateway integration coverage
+    def subscribed_instrument_ids(self) -> set[str]: ...
+    def add_contract(self, contract: Contract): ...
+    def price(self, instrument_id) -> float | None: ...
+    def has_all_ticks(self, *instrument_ids) -> bool: ...
+    def buy(self, instrument_id, volume, price=None): ...
+    def sell(self, instrument_id, volume, price=None): ...
+    def close_long(self, instrument_id, volume, price=None): ...
+    def close_short(self, instrument_id, volume, price=None): ...
+    def on_tick(self, tick: dict): ...
+    def on_order(self, order: dict): ...
+    def on_trade(self, trade: dict): ...
+    def on_init(self): ...
+    def on_start(self): ...
+    def on_stop(self): ...
+```
+
+单合约策略：
+
+```python
+class MacdStrategy(BaseStrategy):
+    def on_init(self):
+        self.add_contract(rb2510_contract)
+
+    def on_tick(self, tick):
+        price = tick["last_price"]
+        signal = self.macd.update(price)
+        if signal.cross_up:
+            self.buy("rb2510", 1)
+        if signal.cross_down:
+            self.sell("rb2510", 1)
+```
+
+价差策略（多合约，不用合成合约概念）：
+
+```python
+class SpreadMacdStrategy(BaseStrategy):
+    def on_init(self):
+        self.add_contract(a2605_contract)
+        self.add_contract(b2701_contract)
+
+    def on_tick(self, tick):
+        self.latest_ticks[tick["instrument_id"]] = tick
+        if not self.has_all_ticks("A2605", "B2701"):
+            return
+        spread = self.price("A2605") - self.price("B2701")
+        signal = self.macd.update(spread)
+        if signal.cross_up:
+            self.buy("A2605", 1)
+            self.sell("B2701", 1)
+        if signal.cross_down:
+            self.sell("A2605", 1)
+            self.buy("B2701", 1)
+```
+
+价差 / 篮子 / 套利都是策略内部逻辑，框架不需要知道。
+
+### Tag
+
+批量控制和聚合查询维度：
+
+```python
+runtime.start_by_tag("macd")
+runtime.stop_by_tag("arbitrage")
+runtime.positions_by_tag("trend")
+runtime.trades_by_tag("spread")
+```
+
+## StrategyRuntime
+
+```
+- 注册/注销策略实例
+- 按策略实例订阅合约行情（去重）
+- tick → 路由到订阅该合约的策略
+- send_order_for_strategy(strategy, ...)
+- 维护 order_ref → strategy
+- ORDER / TRADE 按 order_ref 路由
+- 按 name / tag 控制、查询
+```
+
+## 订单和成交路由原则
+
+tick：按 `instrument_id` 路由。
+
+订单和成交：**不能按 `instrument_id`**，按 `order_ref` 路由。
+
+```
+strategy.buy/sell
+→ runtime.send_order_for_strategy(strategy, ...)
+→ td_gateway.send_order(...)
+→ 得到 CTP order_ref
+→ runtime 记录 order_ref → strategy.name
+→ ORDER / TRADE 回报
+→ runtime 按 order_ref 找 strategy
+→ strategy.on_order / strategy.on_trade
+```
+
+## 仓位原则
+
+- `BaseStrategy.positions` 按合约区分，每个实例独立维护
+- 成交回报按 order_ref 更新仓位
+- `Position.apply_trade(direction, offset, volume, price)` 直接更新
+- CTP query position 作为账户级对账，不强行分摊给策略
+
+## 不要引入
+
+- `AbstractUnit`
+- `RealUnit`
+- `SyntheticUnit`
+- `ExecutionBody`
+- `ContractManager`（runtime 内部 `_contracts` 即可）
+- `Portfolio`（短期用 tag 替代）

@@ -170,3 +170,85 @@ class TestPositionUpdateFromCtp:
         assert p.long_yd == 2
         assert p.short_yd == 5
         assert p.short_today == 3
+
+
+class TestPositionApplyTrade:
+    def test_buy_open_adds_long_today(self):
+        p = Position(instrument_id="rb2501")
+        p.apply_trade(direction="buy", offset="open", volume=3, price=3500.0)
+        assert p.long_today == 3
+        assert p.long_volume == 3
+        assert p.long_avg_price == 3500.0
+
+    def test_buy_open_updates_avg_price(self):
+        p = Position(instrument_id="rb2501", long_today=2, long_avg_price=3000.0)
+        p.apply_trade(direction="buy", offset="open", volume=3, price=3500.0)
+        assert p.long_today == 5
+        assert p.long_avg_price == 3300.0
+
+    def test_sell_open_adds_short_today(self):
+        p = Position(instrument_id="rb2501")
+        p.apply_trade(direction="sell", offset="open", volume=2, price=3400.0)
+        assert p.short_today == 2
+        assert p.short_volume == 2
+        assert p.short_avg_price == 3400.0
+
+    def test_buy_close_reduces_short(self):
+        p = Position(instrument_id="rb2501", short_yd=5)
+        p.apply_trade(direction="buy", offset="close", volume=3, price=3500.0)
+        assert p.short_yd == 2
+        assert p.short_volume == 2
+
+    def test_sell_close_reduces_long(self):
+        p = Position(instrument_id="rb2501", long_yd=5)
+        p.apply_trade(direction="sell", offset="close", volume=3, price=3500.0)
+        assert p.long_yd == 2
+        assert p.long_volume == 2
+
+    def test_close_does_not_go_below_zero(self):
+        p = Position(instrument_id="rb2501", long_yd=2)
+        p.apply_trade(direction="sell", offset="close", volume=5, price=3500.0)
+        assert p.long_yd == 0
+        assert p.long_volume == 0
+
+    def test_sell_close_reduces_only_requested_volume_from_mixed_long(self):
+        p = Position(instrument_id="rb2501", long_yd=2, long_today=3)
+        p.apply_trade(direction="sell", offset="close", volume=1, price=3500.0)
+        assert p.long_yd == 1
+        assert p.long_today == 3
+        assert p.long_volume == 4
+
+    def test_buy_close_reduces_only_requested_volume_from_mixed_short(self):
+        p = Position(instrument_id="rb2501", short_yd=2, short_today=3)
+        p.apply_trade(direction="buy", offset="close", volume=1, price=3500.0)
+        assert p.short_yd == 1
+        assert p.short_today == 3
+        assert p.short_volume == 4
+
+    def test_close_today_reduces_today_bucket(self):
+        p = Position(instrument_id="rb2501", long_yd=2, long_today=3)
+        p.apply_trade(direction="sell", offset="close_today", volume=2, price=3500.0)
+        assert p.long_yd == 2
+        assert p.long_today == 1
+
+    def test_close_yesterday_reduces_yd_bucket(self):
+        p = Position(instrument_id="rb2501", long_yd=2, long_today=3)
+        p.apply_trade(direction="sell", offset="close_yesterday", volume=2, price=3500.0)
+        assert p.long_yd == 0
+        assert p.long_today == 3
+
+    def test_ctp_buy_open_adds_long_today(self):
+        p = Position(instrument_id="rb2501")
+        p.apply_trade(direction="0", offset="0", volume=3, price=3500.0)
+        assert p.long_today == 3
+
+    def test_ctp_sell_open_adds_short_today(self):
+        p = Position(instrument_id="rb2501")
+        p.apply_trade(direction="1", offset="0", volume=2, price=3500.0)
+        assert p.short_today == 2
+
+    def test_ctp_sell_close_today_reduces_long_today(self):
+        p = Position(instrument_id="rb2501", long_yd=2, long_today=3)
+        p.apply_trade(direction="1", offset="3", volume=2, price=3500.0)
+        assert p.long_yd == 2
+        assert p.long_today == 1

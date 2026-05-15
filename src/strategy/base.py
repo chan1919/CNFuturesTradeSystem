@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from src.strategy.unit import AbstractUnit, SyntheticUnit
+
 from src.common.position import Position
 
 
@@ -13,74 +13,61 @@ class StrategyStatus:
 class BaseStrategy(ABC):
     def __init__(self, name: str, runtime=None):
         self.name = name
+        self.tags: set[str] = set()
         self.status = StrategyStatus.STOPPED
         self.runtime = runtime
-        self.units: dict[str, AbstractUnit] = {}
-        self._last_account: dict = {}
-        self._component_unit_map: dict[str, list[AbstractUnit]] = {}
+        self.contracts: dict[str, "Contract"] = {}
+        self.positions: dict[str, Position] = {}
+        self.latest_ticks: dict[str, dict] = {}
+        self.orders: dict[str, dict] = {}
+        self.trades: dict[str, dict] = {}
+        self._enabled: bool = True
 
-    # ── 单元管理 ──
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
 
-    def add_unit(self, unit: AbstractUnit):
-        self.units[unit.instrument_id] = unit
-        for component_id in unit.component_instrument_ids():
-            self._component_unit_map.setdefault(component_id, []).append(unit)
+    def enable(self):
+        self._enabled = True
 
-    def remove_unit(self, instrument_id: str):
-        unit = self.units.pop(instrument_id, None)
-        if unit:
-            for component_id in unit.component_instrument_ids():
-                listeners = self._component_unit_map.get(component_id, [])
-                if unit in listeners:
-                    listeners.remove(unit)
-                if not listeners:
-                    self._component_unit_map.pop(component_id, None)
-            unit.disable()
+    def disable(self):
+        self._enabled = False
 
-    def get_unit(self, instrument_id: str) -> AbstractUnit | None:
-        return self.units.get(instrument_id)
+    def subscribed_instrument_ids(self) -> set[str]:
+        return set(self.contracts.keys())
 
-    def list_unit_ids(self) -> list[str]:
-        return list(self.units.keys())
+    def add_contract(self, contract: "Contract"):
+        self.contracts[contract.instrument_id] = contract
+        self.positions.setdefault(contract.instrument_id, Position(instrument_id=contract.instrument_id))
+        self.latest_ticks.setdefault(contract.instrument_id, {})
 
-    def list_synthetic_units(self) -> list[SyntheticUnit]:
-        return [u for u in self.units.values() if isinstance(u, SyntheticUnit)]
+    def has_all_ticks(self, *instrument_ids: str) -> bool:
+        return all(
+            self.latest_ticks.get(iid, {}).get("last_price") is not None
+            for iid in instrument_ids
+        )
 
-    # ── 委托操作 ──
+    def price(self, instrument_id: str) -> float | None:
+        tick = self.latest_ticks.get(instrument_id, {})
+        return tick.get("last_price")
 
-    def enable(self, instrument_id: str):
-        u = self.get_unit(instrument_id)
-        if u:
-            u.enable()
+    # ── 下单辅助 ──
 
-    def disable(self, instrument_id: str):
-        u = self.get_unit(instrument_id)
-        if u:
-            u.disable()
+    def buy(self, instrument_id: str, volume: int, price: float | None = None):
+        if self.runtime:
+            self.runtime.send_order_for_strategy(self, instrument_id, "buy", "open", price or 0, volume)
 
-    def update_params(self, instrument_id: str, params: dict):
-        u = self.get_unit(instrument_id)
-        if u:
-            u.update_params(params)
+    def sell(self, instrument_id: str, volume: int, price: float | None = None):
+        if self.runtime:
+            self.runtime.send_order_for_strategy(self, instrument_id, "sell", "open", price or 0, volume)
 
-    def restart(self, instrument_id: str):
-        u = self.get_unit(instrument_id)
-        if u:
-            u.restart()
+    def close_long(self, instrument_id: str, volume: int, price: float | None = None):
+        if self.runtime:
+            self.runtime.send_order_for_strategy(self, instrument_id, "sell", "close", price or 0, volume)
 
-    def clear_position(self, instrument_id: str):
-        u = self.get_unit(instrument_id)
-        if u:
-            u.clear_position()
-
-    # ── 聚合查询 ──
-
-    def get_all_positions(self) -> list[Position]:
-        return [u.position for u in self.units.values()]
-
-    def get_positions_for(self, product_id: str) -> list[Position]:
-        return [u.position for u in self.units.values()
-                if u.contract is not None and u.contract.product_id == product_id]
+    def close_short(self, instrument_id: str, volume: int, price: float | None = None):
+        if self.runtime:
+            self.runtime.send_order_for_strategy(self, instrument_id, "buy", "close", price or 0, volume)
 
     # ── 生命周期 ──
 
@@ -89,70 +76,20 @@ class BaseStrategy(ABC):
         ...
 
     def on_start(self):
-        for unit in self.units.values():
-            unit.enable()
+        pass
 
     def on_stop(self):
-        for unit in self.units.values():
-            unit.disable()
+        self._enabled = False
         self.status = StrategyStatus.STOPPED
 
-    def on_tick(self, tick: dict, unit: AbstractUnit):
+    def on_tick(self, tick: dict):
         pass
 
-    def on_order(self, order: dict, unit: AbstractUnit):
+    def on_order(self, order: dict):
         pass
 
-    def on_trade(self, trade: dict, unit: AbstractUnit):
-        pass
-
-    def on_position(self, position_event: dict, unit: AbstractUnit):
+    def on_trade(self, trade: dict):
         pass
 
     def on_account(self, account: dict):
         pass
-
-    # ── 内部 ──
-
-    def _route_tick(self, event):
-        tick = event.data
-        instrument_id = tick.get("instrument_id", "")
-        candidates: list[AbstractUnit] = []
-
-        direct_unit = self.get_unit(instrument_id)
-        if direct_unit is not None:
-            candidates.append(direct_unit)
-
-        for unit in self._component_unit_map.get(instrument_id, []):
-            if unit not in candidates:
-                candidates.append(unit)
-
-        for unit in candidates:
-            if not unit.enabled:
-                continue
-            if unit.contract is not None and tick.get("last_price") is not None:
-                unit.position.last_price = tick["last_price"]
-            routed_tick = unit.on_tick(tick)
-            if routed_tick is None:
-                continue
-            if routed_tick.get("last_price") is not None:
-                unit.position.last_price = routed_tick["last_price"]
-            self.on_tick(routed_tick, unit)
-
-    def _route_position(self, event):
-        data = event.data
-        inst_id = data.get("instrument_id", "")
-        unit = self.get_unit(inst_id)
-        if unit is None:
-            return
-        unit.position.update_from_ctp(
-            posi_direction=data.get("posi_direction", ""),
-            yd=data.get("yd_position", 0),
-            today=data.get("today_position", 0),
-            frozen=data.get("frozen", 0),
-        )
-        self.on_position(data, unit)
-
-    def _route_account(self, event):
-        self._last_account = dict(event.data)
-        self.on_account(event.data)
