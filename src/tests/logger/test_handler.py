@@ -5,13 +5,14 @@ from datetime import datetime
 import pytest
 from src.event_bus.event_bus import EventBus
 from src.event_bus.event import Event, EventType
-from src.event_bus.logger import LogHandler, LOG_DIR, LOG_EVENTS
+from src.logger.handler import LogHandler, LOG_DIR, LOG_EVENTS
 
 
 @pytest.fixture(autouse=True)
 def patch_log_dir(tmp_path):
     original = LogHandler.__init__
     original_close = getattr(LogHandler, "close", None)
+
     def patched_init(self, event_bus, level=logging.INFO):
         self._ee = event_bus
         self._logger = logging.getLogger("CNFuturesTest")

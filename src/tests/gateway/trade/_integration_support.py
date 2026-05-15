@@ -14,7 +14,7 @@ from src.common.config import (
 )
 from src.event_bus.event import EventType
 from src.event_bus.event_bus import EventBus
-from src.event_bus.logger import LogHandler
+from src.logger.handler import LogHandler
 from src.gateway.md_gateway import MdGateway
 from src.gateway.td_gateway import TdGateway
 

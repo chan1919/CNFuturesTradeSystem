@@ -30,7 +30,8 @@ CNFuturesTradeSystem/
 │   ├── event_bus/
 │   │   ├── event.py
 │   │   ├── event_bus.py
-│   │   └── logger.py
+│   ├── logger/
+│   │   └── handler.py
 │   ├── gateway/
 │   │   ├── _ctp_backend.py
 │   │   ├── base.py
@@ -77,7 +78,10 @@ CNFuturesTradeSystem/
 
 - [event.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event.py): `Event` / `EventType`
 - [event_bus.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/event_bus.py): `EventBus` 发布订阅总线
-- [logger.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/event_bus/logger.py): 日志事件落盘
+
+### `src/logger`
+
+- [handler.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/logger/handler.py): `LogHandler` 订阅 EventBus，按 log_level 将事件写入文件
 
 ### `src/gateway`
 
