@@ -43,10 +43,11 @@ def make_contract(symbol, exchange=Exchange.SHFE):
 
 @pytest.fixture
 def engine():
+    gw = MagicMock()
+    gw.account = MagicMock()
     return StrategyRuntime(
         event_bus=MagicMock(),
-        td_gateway=MagicMock(),
-        md_gateway=MagicMock(),
+        gateway=gw,
     )
 
 
@@ -100,7 +101,7 @@ class TestStrategyRuntimeStart:
     def test_start_registers_tick_handler(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
         engine.event_bus.register.assert_any_call(EventType.TICK, engine._tick_handler)
 
@@ -111,23 +112,23 @@ class TestStrategyRuntimeStart:
         s.add_contract(c1)
         s.add_contract(c2)
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
-        assert engine.md_gateway.subscribe.call_count == 2
-        engine.md_gateway.subscribe.assert_any_call("rb2501")
-        engine.md_gateway.subscribe.assert_any_call("rb2510")
+        assert engine.gateway.subscribe.call_count == 2
+        engine.gateway.subscribe.assert_any_call("rb2501")
+        engine.gateway.subscribe.assert_any_call("rb2510")
 
     def test_start_calls_strategy_on_start(self, engine):
         s = SpyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
         assert s.start_called is True
 
     def test_start_sets_status_running(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
         assert s.status == StrategyStatus.RUNNING
 
@@ -147,7 +148,7 @@ class TestStrategyRuntimeStart:
         s2 = DummyStrategy("b")
         engine.register(s1)
         engine.register(s2)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("a")
         engine.start("b")
         tick_registrations = [
@@ -161,7 +162,7 @@ class TestStrategyRuntimeStop:
     def test_stop_calls_strategy_on_stop(self, engine):
         s = SpyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
         engine.stop("test_strat")
         assert s.stop_called is True
@@ -169,7 +170,7 @@ class TestStrategyRuntimeStop:
     def test_stop_sets_status_stopped(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
         engine.stop("test_strat")
         assert s.status == StrategyStatus.STOPPED
@@ -178,7 +179,7 @@ class TestStrategyRuntimeStop:
         s = DummyStrategy("test_strat")
         s.add_contract(make_contract("rb2501"))
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
         engine.stop("test_strat")
         engine.start("test_strat")
@@ -201,7 +202,7 @@ class TestStrategyRuntimeBulk:
         s2 = DummyStrategy("b")
         engine.register(s1)
         engine.register(s2)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start_all()
         assert s1.status == StrategyStatus.RUNNING
         assert s2.status == StrategyStatus.RUNNING
@@ -211,7 +212,7 @@ class TestStrategyRuntimeBulk:
         s2 = DummyStrategy("b")
         engine.register(s1)
         engine.register(s2)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start_all()
         engine.stop_all()
         assert s1.status == StrategyStatus.STOPPED
@@ -241,7 +242,7 @@ class TestStrategyRuntimeTagControl:
         s2.tags.add("other")
         engine.register(s1)
         engine.register(s2)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start_by_tag("macd")
         assert s1.status == StrategyStatus.RUNNING
         assert s2.status == StrategyStatus.STOPPED
@@ -253,7 +254,7 @@ class TestStrategyRuntimeTagControl:
         s2.tags.add("macd")
         engine.register(s1)
         engine.register(s2)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start_all()
         engine.stop_by_tag("macd")
         assert s1.status == StrategyStatus.STOPPED
@@ -265,7 +266,7 @@ class TestStrategyRuntimeTagControl:
         c = make_contract("rb2501")
         s.add_contract(c)
         engine.register(s)
-        engine.account.get_or_create(c)
+        engine.gateway.account.get_or_create(c)
         result = engine.positions_by_tag("macd")
         assert "rb2501" in result
         assert len(result["rb2501"]) == 1
@@ -292,35 +293,19 @@ class TestStrategyRuntimeTickRouting:
         c = make_contract("rb2501")
         s.add_contract(c)
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
         tick_data = {"instrument_id": "rb2501", "last_price": 3500.0}
         engine._on_tick(MagicMock(data=tick_data))
         assert s.latest_ticks.get("rb2501", {}).get("last_price") == 3500.0
 
-    def test_tick_updates_account_position(self, engine):
-        s = DummyStrategy("test_strat")
-        c = make_contract("rb2501")
-        s.add_contract(c)
-        engine.register(s)
-        engine.account.get_or_create(c)
-        engine.md_gateway.subscribe = MagicMock()
-        engine.start("test_strat")
-
-        tick_data = {"instrument_id": "rb2501", "last_price": 3555.0}
-        engine._on_tick(MagicMock(data=tick_data))
-
-        pos = engine.account.get_position("rb2501")
-        assert pos is not None
-        assert pos.last_price == 3555.0
-
     def test_tick_does_not_route_to_unsubscribed(self, engine):
         s = DummyStrategy("test_strat")
         c = make_contract("rb2501")
         s.add_contract(c)
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
         tick_data = {"instrument_id": "rb2510", "last_price": 3400.0}
@@ -335,7 +320,7 @@ class TestStrategyRuntimeTickRouting:
         s2.add_contract(c)
         engine.register(s1)
         engine.register(s2)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("a")
         engine.start("b")
 
@@ -349,7 +334,7 @@ class TestStrategyRuntimeOrderRouting:
     def test_order_routes_by_order_ref(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
         engine._order_ref_to_strategy["123"] = "test_strat"
@@ -360,7 +345,7 @@ class TestStrategyRuntimeOrderRouting:
     def test_order_skips_unknown_order_ref(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
         order_data = {"order_ref": "999", "instrument_id": "rb2501"}
@@ -374,7 +359,7 @@ class TestStrategyRuntimeTradeRouting:
         c = make_contract("rb2501")
         s.add_contract(c)
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
         engine._order_ref_to_strategy["123"] = "test_strat"
@@ -390,34 +375,10 @@ class TestStrategyRuntimeTradeRouting:
         engine._on_trade(MagicMock(data=trade_data))
         assert s.trades.get("t001", {}).get("trade_id") == "t001"
 
-    def test_trade_updates_account_position(self, engine):
-        s = DummyStrategy("test_strat")
-        c = make_contract("rb2501")
-        s.add_contract(c)
-        engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
-        engine.start("test_strat")
-
-        engine._order_ref_to_strategy["123"] = "test_strat"
-        trade_data = {
-            "trade_id": "t001",
-            "order_ref": "123",
-            "instrument_id": "rb2501",
-            "direction": "buy",
-            "offset_flag": "open",
-            "volume": 3,
-            "price": 3500.0,
-        }
-        engine._on_trade(MagicMock(data=trade_data))
-
-        pos = engine.account.get_position("rb2501")
-        assert pos is not None
-        assert pos.long_today == 3
-
     def test_trade_skips_unknown_order_ref(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
         trade_data = {"trade_id": "t001", "order_ref": "999"}
@@ -429,11 +390,11 @@ class TestStrategyRuntimeSendOrder:
     def test_send_order_for_strategy(self, engine):
         s = DummyStrategy("test_strat")
         engine.register(s)
-        engine.md_gateway.subscribe = MagicMock()
+        engine.gateway.subscribe = MagicMock()
         engine.start("test_strat")
 
-        engine.td_gateway.send_order = MagicMock(return_value="456")
+        engine.gateway.send_order = MagicMock(return_value="456")
         ref = engine.send_order_for_strategy(s, "rb2501", "buy", "open", 3500.0, 2)
         assert ref == "456"
         assert engine._order_ref_to_strategy["456"] == "test_strat"
-        engine.td_gateway.send_order.assert_called_once_with("rb2501", "buy", "open", 3500.0, 2)
+        engine.gateway.send_order.assert_called_once_with("rb2501", "buy", "open", 3500.0, 2)

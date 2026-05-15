@@ -12,6 +12,54 @@ def make_contract(symbol, exchange=Exchange.SHFE, multiplier=10, tick_size=1.0):
     )
 
 
+class TestAccountFunds:
+    def test_default_funds_are_zero(self):
+        acc = Account()
+        assert acc.balance == 0.0
+        assert acc.available == 0.0
+        assert acc.curr_margin == 0.0
+        assert acc.frozen_margin == 0.0
+        assert acc.frozen_cash == 0.0
+        assert acc.position_profit == 0.0
+        assert acc.commission == 0.0
+        assert acc.pre_balance == 0.0
+
+    def test_update_from_query_sets_all_fields(self):
+        acc = Account()
+        acc.update_from_query({
+            "balance": 150000.0,
+            "available": 80000.0,
+            "curr_margin": 50000.0,
+            "frozen_margin": 10000.0,
+            "frozen_cash": 5000.0,
+            "position_profit": 12000.0,
+            "commission": 3000.0,
+            "pre_balance": 140000.0,
+        })
+        assert acc.balance == 150000.0
+        assert acc.available == 80000.0
+        assert acc.curr_margin == 50000.0
+        assert acc.frozen_margin == 10000.0
+        assert acc.frozen_cash == 5000.0
+        assert acc.position_profit == 12000.0
+        assert acc.commission == 3000.0
+        assert acc.pre_balance == 140000.0
+
+    def test_update_from_query_partial(self):
+        acc = Account()
+        acc.update_from_query({"balance": 100000.0})
+        acc.update_from_query({"available": 60000.0, "balance": 90000.0})
+        assert acc.balance == 90000.0
+        assert acc.available == 60000.0
+
+    def test_update_from_query_preserves_unspecified(self):
+        acc = Account()
+        acc.update_from_query({"balance": 100000.0})
+        acc.update_from_query({"available": 60000.0})
+        assert acc.balance == 100000.0  # 未指定的字段保持不变
+        assert acc.available == 60000.0
+
+
 class TestAccountCreate:
     def test_empty_account(self):
         acc = Account()

@@ -1,14 +1,18 @@
-from src.common.account import Account
 from src.event_bus.event import EventType
 from src.strategy.base import BaseStrategy, StrategyStatus
 
 
 class StrategyRuntime:
-    def __init__(self, event_bus, td_gateway, md_gateway):
+    """策略运行时 — 注册、生命周期、事件路由
+
+    tick 按 instrument_id 路由到订阅的策略。
+    order/trade 按 order_ref 路由（非 instrument_id，避免多策略同合约时归属错误）。
+    仓位管理由 Gateway 的 Account 统一处理，Runtime 只负责路由。
+    """
+
+    def __init__(self, event_bus, gateway):
         self.event_bus = event_bus
-        self.td_gateway = td_gateway
-        self.md_gateway = md_gateway
-        self.account = Account()
+        self.gateway = gateway
         self.strategies: dict[str, BaseStrategy] = {}
         self._order_ref_to_strategy: dict[str, str] = {}
         self._instrument_to_strategies: dict[str, list[BaseStrategy]] = {}
@@ -23,6 +27,8 @@ class StrategyRuntime:
         strategy.runtime = self
         strategy.on_init()
         self.strategies[strategy.name] = strategy
+        for c in strategy.contracts.values():
+            self.gateway.add_contract(c)
         for iid in strategy.subscribed_instrument_ids():
             self._instrument_to_strategies.setdefault(iid, []).append(strategy)
 
@@ -60,7 +66,7 @@ class StrategyRuntime:
         s.status = StrategyStatus.STARTING
         s.enable()
         for iid in s.subscribed_instrument_ids():
-            self.md_gateway.subscribe(iid)
+            self.gateway.subscribe(iid)
         s.on_start()
         s.status = StrategyStatus.RUNNING
 
@@ -92,7 +98,7 @@ class StrategyRuntime:
         result = {}
         for s in self.list_by_tag(tag):
             for iid in s.contracts:
-                pos = self.account.get_position(iid)
+                pos = self.gateway.account.get_position(iid)
                 if pos:
                     result.setdefault(iid, []).append(pos)
         return result
@@ -107,7 +113,7 @@ class StrategyRuntime:
 
     def send_order_for_strategy(self, strategy: BaseStrategy, instrument_id: str,
                                 direction: str, offset: str, price: float, volume: int):
-        order_ref = self.td_gateway.send_order(instrument_id, direction, offset, price, volume)
+        order_ref = self.gateway.send_order(instrument_id, direction, offset, price, volume)
         self._order_ref_to_strategy[order_ref] = strategy.name
         return order_ref
 
@@ -130,19 +136,9 @@ class StrategyRuntime:
         strategy.on_stop()
         strategy.status = StrategyStatus.STOPPED
 
-    def _find_contract(self, instrument_id: str) -> "Contract | None":
-        for s in self.strategies.values():
-            c = s.contracts.get(instrument_id)
-            if c:
-                return c
-        return None
-
     def _on_tick(self, event):
         tick = event.data
         iid = tick.get("instrument_id", "")
-        pos = self.account.get_position(iid)
-        if pos:
-            pos.update_last_price(tick.get("last_price", 0))
         for s in self._instrument_to_strategies.get(iid, []):
             if not s.enabled or s.status != StrategyStatus.RUNNING:
                 continue
@@ -173,17 +169,6 @@ class StrategyRuntime:
         iid = trade.get("instrument_id", "")
         trade_id = trade.get("trade_id", "")
         s.trades[trade_id or str(len(s.trades))] = trade
-
-        contract = self._find_contract(iid)
-        if contract:
-            self.account.apply_trade(
-                contract=contract,
-                direction=trade.get("direction", ""),
-                offset=trade.get("offset_flag", ""),
-                volume=trade.get("volume", 0),
-                price=float(trade.get("price", 0)),
-            )
-
         s.on_trade(trade)
 
     def _on_account(self, event):

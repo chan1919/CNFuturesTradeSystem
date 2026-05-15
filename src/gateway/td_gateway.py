@@ -17,10 +17,12 @@ PRICE_TYPE_LIMIT = "2"
 
 
 def _direction_to_str(direction: str) -> str:
+    """CTP Direction 枚举 → 语义值"""
     return "buy" if direction == "0" else "sell"
 
 
 def _offset_to_str(offset: str) -> str:
+    """CTP CombOffsetFlag / OffsetFlag 枚举 → 语义值"""
     return {
         "0": "open",
         "1": "close",
@@ -30,6 +32,7 @@ def _offset_to_str(offset: str) -> str:
 
 
 def _posi_direction_to_str(direction: str) -> str:
+    """CTP PosiDirection 枚举 → "long"/"short" """
     return "long" if direction == "2" else "short"
 
 

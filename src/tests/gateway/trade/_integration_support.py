@@ -15,8 +15,7 @@ from src.common.config import (
 from src.event_bus.event import EventType
 from src.event_bus.event_bus import EventBus
 from src.logger.handler import LogHandler
-from src.gateway.md_gateway import MdGateway
-from src.gateway.td_gateway import TdGateway
+from src.gateway.gateway import Gateway
 
 
 def get_gateway_config() -> dict[str, str]:
@@ -63,25 +62,21 @@ class GatewayIntegrationHarness:
         cfg = get_gateway_config()
         self.event_bus = EventBus()
         self.logger = LogHandler(self.event_bus)
-        self.md_gw = MdGateway(
+        self.gw = Gateway(
             self.event_bus,
-            front_url=cfg["md_front"],
-            broker_id=cfg["broker_id"],
-            user_id=cfg["user_id"],
-            password=cfg["password"],
-        )
-        self.td_gw = TdGateway(
-            self.event_bus,
-            front_url=cfg["td_front"],
+            md_front_url=cfg["md_front"],
+            td_front_url=cfg["td_front"],
             broker_id=cfg["broker_id"],
             user_id=cfg["user_id"],
             password=cfg["password"],
             app_id=cfg["app_id"],
             auth_code=cfg["auth_code"],
         )
+        self.md_gw = self.gw.md
+        self.td_gw = self.gw.td
 
     def close(self):
-        for closer in (self.md_gw.close, self.td_gw.close, self.logger.close):
+        for closer in (self.gw.close, self.logger.close):
             try:
                 closer()
             except Exception:
