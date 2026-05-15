@@ -1,3 +1,4 @@
+from src.common.account import Account
 from src.event_bus.event import EventType
 from src.strategy.base import BaseStrategy, StrategyStatus
 
@@ -7,6 +8,7 @@ class StrategyRuntime:
         self.event_bus = event_bus
         self.td_gateway = td_gateway
         self.md_gateway = md_gateway
+        self.account = Account()
         self.strategies: dict[str, BaseStrategy] = {}
         self._order_ref_to_strategy: dict[str, str] = {}
         self._instrument_to_strategies: dict[str, list[BaseStrategy]] = {}
@@ -89,8 +91,10 @@ class StrategyRuntime:
     def positions_by_tag(self, tag: str) -> dict[str, list]:
         result = {}
         for s in self.list_by_tag(tag):
-            for iid, pos in s.positions.items():
-                result.setdefault(iid, []).append(pos)
+            for iid in s.contracts:
+                pos = self.account.get_position(iid)
+                if pos:
+                    result.setdefault(iid, []).append(pos)
         return result
 
     def trades_by_tag(self, tag: str) -> list[dict]:
@@ -126,15 +130,23 @@ class StrategyRuntime:
         strategy.on_stop()
         strategy.status = StrategyStatus.STOPPED
 
+    def _find_contract(self, instrument_id: str) -> "Contract | None":
+        for s in self.strategies.values():
+            c = s.contracts.get(instrument_id)
+            if c:
+                return c
+        return None
+
     def _on_tick(self, event):
         tick = event.data
         iid = tick.get("instrument_id", "")
+        pos = self.account.get_position(iid)
+        if pos:
+            pos.update_last_price(tick.get("last_price", 0))
         for s in self._instrument_to_strategies.get(iid, []):
             if not s.enabled or s.status != StrategyStatus.RUNNING:
                 continue
             s.latest_ticks[iid] = tick
-            if s.positions.get(iid):
-                s.positions[iid].last_price = tick.get("last_price", 0)
             s.on_tick(tick)
 
     def _on_order(self, event):
@@ -161,14 +173,17 @@ class StrategyRuntime:
         iid = trade.get("instrument_id", "")
         trade_id = trade.get("trade_id", "")
         s.trades[trade_id or str(len(s.trades))] = trade
-        pos = s.positions.get(iid)
-        if pos:
-            pos.apply_trade(
+
+        contract = self._find_contract(iid)
+        if contract:
+            self.account.apply_trade(
+                contract=contract,
                 direction=trade.get("direction", ""),
                 offset=trade.get("offset_flag", ""),
                 volume=trade.get("volume", 0),
                 price=float(trade.get("price", 0)),
             )
+
         s.on_trade(trade)
 
     def _on_account(self, event):

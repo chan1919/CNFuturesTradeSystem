@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock, call
+
+import pytest
 
 from src.event_bus.event import EventType
 from src.strategy.runtime import StrategyRuntime
@@ -264,6 +265,7 @@ class TestStrategyRuntimeTagControl:
         c = make_contract("rb2501")
         s.add_contract(c)
         engine.register(s)
+        engine.account.get_or_create(c)
         result = engine.positions_by_tag("macd")
         assert "rb2501" in result
         assert len(result["rb2501"]) == 1
@@ -296,7 +298,22 @@ class TestStrategyRuntimeTickRouting:
         tick_data = {"instrument_id": "rb2501", "last_price": 3500.0}
         engine._on_tick(MagicMock(data=tick_data))
         assert s.latest_ticks.get("rb2501", {}).get("last_price") == 3500.0
-        assert s.positions["rb2501"].last_price == 3500.0
+
+    def test_tick_updates_account_position(self, engine):
+        s = DummyStrategy("test_strat")
+        c = make_contract("rb2501")
+        s.add_contract(c)
+        engine.register(s)
+        engine.account.get_or_create(c)
+        engine.md_gateway.subscribe = MagicMock()
+        engine.start("test_strat")
+
+        tick_data = {"instrument_id": "rb2501", "last_price": 3555.0}
+        engine._on_tick(MagicMock(data=tick_data))
+
+        pos = engine.account.get_position("rb2501")
+        assert pos is not None
+        assert pos.last_price == 3555.0
 
     def test_tick_does_not_route_to_unsubscribed(self, engine):
         s = DummyStrategy("test_strat")
@@ -372,11 +389,11 @@ class TestStrategyRuntimeTradeRouting:
         }
         engine._on_trade(MagicMock(data=trade_data))
         assert s.trades.get("t001", {}).get("trade_id") == "t001"
-        assert s.positions["rb2501"].long_today == 3
 
-    def test_trade_routes_ctp_enum_values_to_position(self, engine):
+    def test_trade_updates_account_position(self, engine):
         s = DummyStrategy("test_strat")
-        s.add_contract(make_contract("rb2501"))
+        c = make_contract("rb2501")
+        s.add_contract(c)
         engine.register(s)
         engine.md_gateway.subscribe = MagicMock()
         engine.start("test_strat")
@@ -386,14 +403,16 @@ class TestStrategyRuntimeTradeRouting:
             "trade_id": "t001",
             "order_ref": "123",
             "instrument_id": "rb2501",
-            "direction": "0",
-            "offset_flag": "0",
+            "direction": "buy",
+            "offset_flag": "open",
             "volume": 3,
             "price": 3500.0,
         }
         engine._on_trade(MagicMock(data=trade_data))
 
-        assert s.positions["rb2501"].long_today == 3
+        pos = engine.account.get_position("rb2501")
+        assert pos is not None
+        assert pos.long_today == 3
 
     def test_trade_skips_unknown_order_ref(self, engine):
         s = DummyStrategy("test_strat")

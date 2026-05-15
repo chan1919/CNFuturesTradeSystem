@@ -16,6 +16,23 @@ HEDGE_SPECULATION = "1"
 PRICE_TYPE_LIMIT = "2"
 
 
+def _direction_to_str(direction: str) -> str:
+    return "buy" if direction == "0" else "sell"
+
+
+def _offset_to_str(offset: str) -> str:
+    return {
+        "0": "open",
+        "1": "close",
+        "3": "close_today",
+        "4": "close_yesterday",
+    }.get(offset, offset)
+
+
+def _posi_direction_to_str(direction: str) -> str:
+    return "long" if direction == "2" else "short"
+
+
 class TdGateway(BaseGateway):
     def __init__(self, event_bus, front_url="", broker_id="", user_id="", password="",
                  app_id="", auth_code=""):
@@ -268,8 +285,8 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "instrument_id": pOrder.InstrumentID,
             "order_ref": pOrder.OrderRef,
             "order_sys_id": pOrder.OrderSysID,
-            "direction": pOrder.Direction,
-            "offset_flag": pOrder.CombOffsetFlag,
+            "direction": _direction_to_str(pOrder.Direction),
+            "offset_flag": _offset_to_str(pOrder.CombOffsetFlag),
             "order_status": pOrder.OrderStatus,
             "volume_total_original": pOrder.VolumeTotalOriginal,
             "volume_traded": pOrder.VolumeTraded,
@@ -305,8 +322,8 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
             "trade_id": pTrade.TradeID,
             "order_ref": pTrade.OrderRef,
             "order_sys_id": pTrade.OrderSysID,
-            "direction": pTrade.Direction,
-            "offset_flag": pTrade.OffsetFlag,
+            "direction": _direction_to_str(pTrade.Direction),
+            "offset_flag": _offset_to_str(pTrade.OffsetFlag),
             "price": pTrade.Price,
             "volume": pTrade.Volume,
             "trade_date": pTrade.TradeDate,
@@ -318,7 +335,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
         if pInvestorPosition:
             self._ee.put(Event(EventType.POSITION, data={
                 "instrument_id": pInvestorPosition.InstrumentID,
-                "posi_direction": pInvestorPosition.PosiDirection,
+                "direction": _posi_direction_to_str(pInvestorPosition.PosiDirection),
                 "position_date": pInvestorPosition.PositionDate,
                 "yd_position": pInvestorPosition.YdPosition,
                 "today_position": pInvestorPosition.TodayPosition,

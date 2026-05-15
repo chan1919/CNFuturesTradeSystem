@@ -150,7 +150,7 @@ class GatewayIntegrationHarness:
                 continue
 
             instrument_id = data["instrument_id"]
-            close_direction = "sell" if data["posi_direction"] == "2" else "buy"
+            close_direction = "sell" if data["direction"] == "long" else "buy"
 
             if self.md_gw.status not in ("connected", "logined"):
                 self.connect_md()

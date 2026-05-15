@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import MagicMock
 
 from src.strategy.base import BaseStrategy, StrategyStatus
-from src.common.position import Position
 from src.common.exchange import Exchange
 from src.common.contract import Contract
 
@@ -50,14 +49,6 @@ class TestStrategyAddContract:
         s.add_contract(c)
         assert "rb2501" in s.contracts
         assert s.contracts["rb2501"] is c
-
-    def test_add_contract_creates_position(self):
-        s = DummyStrategy("test_strat")
-        c = make_contract("rb2501")
-        s.add_contract(c)
-        assert "rb2501" in s.positions
-        assert isinstance(s.positions["rb2501"], Position)
-        assert s.positions["rb2501"].instrument_id == "rb2501"
 
     def test_add_contract_creates_tick_cache(self):
         s = DummyStrategy("test_strat")

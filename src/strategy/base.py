@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from src.common.position import Position
-
 
 class StrategyStatus:
     STOPPED = "stopped"
@@ -17,7 +15,6 @@ class BaseStrategy(ABC):
         self.status = StrategyStatus.STOPPED
         self.runtime = runtime
         self.contracts: dict[str, "Contract"] = {}
-        self.positions: dict[str, Position] = {}
         self.latest_ticks: dict[str, dict] = {}
         self.orders: dict[str, dict] = {}
         self.trades: dict[str, dict] = {}
@@ -38,7 +35,6 @@ class BaseStrategy(ABC):
 
     def add_contract(self, contract: "Contract"):
         self.contracts[contract.instrument_id] = contract
-        self.positions.setdefault(contract.instrument_id, Position(instrument_id=contract.instrument_id))
         self.latest_ticks.setdefault(contract.instrument_id, {})
 
     def has_all_ticks(self, *instrument_ids: str) -> bool:

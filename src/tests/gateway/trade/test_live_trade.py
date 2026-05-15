@@ -65,7 +65,7 @@ class TestGatewayIntegration:
         print(f"\n[Positions] count={len(positions.events)}")
         for event in positions.events:
             data = event.data
-            side = "long" if data["posi_direction"] == "2" else "short"
+            side = data["direction"]
             print(
                 f"  {data['instrument_id']} {side} "
                 f"yd={data['yd_position']} td={data['today_position']}"
