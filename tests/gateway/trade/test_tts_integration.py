@@ -2,7 +2,7 @@
 import pytest
 
 from src.common.config import is_test_mode
-from src.tests.gateway.trade._integration_support import GatewayIntegrationHarness
+from tests.gateway.trade._integration_support import GatewayIntegrationHarness
 
 
 pytestmark = [pytest.mark.gateway, pytest.mark.live]

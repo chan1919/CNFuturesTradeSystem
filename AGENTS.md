@@ -24,7 +24,7 @@ live_trade_window  会真实发单的测试，要求在可交易时段运行
 
 ```powershell
 python -m pytest
-python -m pytest src/tests
+python -m pytest
 python -m pytest -m "gateway and not live"
 python -m pytest -m "gateway and live"
 python -m pytest -m "gateway and live_trade_window"
@@ -83,20 +83,13 @@ with patch("gateway.td_gateway.tdapi") as mock_tdapi:
 ## 测试文件布局
 
 ```text
-src/tests/
-├── gateway/market/test_md_gateway.py
-├── gateway/trade/test_td_gateway.py
-├── gateway/trade/test_live_trade.py
-├── gateway/trade/test_tts_integration.py
-├── gateway/trade/_integration_support.py
-├── gateway/trade/cleanup_positions.py
-├── strategy/test_*.py
-├── messenger/                    ← 实现时加入
-│   ├── test_base.py
-│   ├── test_router.py
-│   ├── test_bridge.py
-│   └── test_adapters/
-└── test_main.py
+tests/
+├── common/
+├── event_bus/
+├── gateway/
+│   ├── market/test_md_gateway.py
+│   └── trade/
+│       ├── ...
 ```
 
 含义：

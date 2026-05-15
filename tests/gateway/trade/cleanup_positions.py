@@ -1,5 +1,5 @@
 """Close leftover positions using the shared integration harness."""
-from src.tests.gateway.trade._integration_support import GatewayIntegrationHarness
+from tests.gateway.trade._integration_support import GatewayIntegrationHarness
 
 
 def main():

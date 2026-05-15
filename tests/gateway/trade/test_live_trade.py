@@ -12,7 +12,7 @@ import pytest
 
 from src.common.config import is_live_mode
 from src.event_bus.event import EventType
-from src.tests.gateway.trade._integration_support import EventCollector, GatewayIntegrationHarness
+from tests.gateway.trade._integration_support import EventCollector, GatewayIntegrationHarness
 
 
 INSTRUMENT = "m2609"

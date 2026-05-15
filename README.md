@@ -48,15 +48,16 @@ CNFuturesTradeSystem/
 │   │   ├── webhook_server.py
 │   │   ├── adapters/
 │   │   └── commands/
-│   ├── tests/
-│   │   ├── common/
-│   │   ├── event_bus/
-│   │   ├── gateway/
-│   │   │   ├── market/
-│   │   │   └── trade/
-│   │   ├── strategy/
-│   │   └── test_main.py
 │   └── main.py
+├── tests/
+│   ├── common/
+│   ├── event_bus/
+│   ├── gateway/
+│   │   ├── market/
+│   │   └── trade/
+│   ├── logger/
+│   ├── strategy/
+│   └── test_main.py
 ├── docs/
 ├── flow/
 ├── logs/
@@ -139,7 +140,7 @@ CNFuturesTradeSystem/
 ## Test Layout
 
 ```text
-src/tests/
+tests/
 ├── common/
 ├── event_bus/
 ├── gateway/
@@ -150,15 +151,16 @@ src/tests/
 │       ├── test_live_trade.py
 │       ├── test_td_gateway.py
 │       └── test_tts_integration.py
+├── logger/
 ├── strategy/
 └── test_main.py
 ```
 
 说明：
 
-- [test_live_trade.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/gateway/trade/test_live_trade.py): `TTS` / `CTP` 共用主流程集成测试
-- [test_tts_integration.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/gateway/trade/test_tts_integration.py): `TTS` 专属补充覆盖
-- [_integration_support.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/gateway/trade/_integration_support.py): 共享连接、事件等待、发单和清仓骨架
+- [test_live_trade.py](C:/Users/Admin/Desktop/CNFuturesTrade/tests/gateway/trade/test_live_trade.py): `TTS` / `CTP` 共用主流程集成测试
+- [test_tts_integration.py](C:/Users/Admin/Desktop/CNFuturesTrade/tests/gateway/trade/test_tts_integration.py): `TTS` 专属补充覆盖
+- [_integration_support.py](C:/Users/Admin/Desktop/CNFuturesTrade/tests/gateway/trade/_integration_support.py): 共享连接、事件等待、发单和清仓骨架
 
 ## Test Markers
 
@@ -172,7 +174,6 @@ src/tests/
 
 ```powershell
 python -m pytest
-python -m pytest src/tests
 python -m pytest -m "gateway and not live"
 python -m pytest -m "gateway and live"
 python -m pytest -m "gateway and live_trade_window"

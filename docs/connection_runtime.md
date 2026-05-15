@@ -103,5 +103,5 @@ Allowed proactive connection window:
 Tests should stay split across three layers:
 
 1. `trading_time` pure-function tests
-2. `RuntimeGuard` behavior tests in [test_main.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/tests/test_main.py)
+2. `RuntimeGuard` behavior tests in [test_main.py](C:/Users/Admin/Desktop/CNFuturesTrade/tests/test_main.py)
 3. gateway tests that validate callbacks and requests, not runtime reconnection strategy
