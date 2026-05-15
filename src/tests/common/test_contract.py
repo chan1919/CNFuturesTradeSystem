@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 import pytest
 
 from src.common.contract import Contract
@@ -10,9 +8,8 @@ def _rb2510() -> Contract:
     return Contract(
         instrument_id="rb2510",
         exchange=Exchange.SHFE,
-        product_id="rb",
         multiplier=10,
-        price_tick=Decimal("1"),
+        tick_size=1.0,
     )
 
 
@@ -21,9 +18,8 @@ class TestContract:
         c = _rb2510()
         assert c.instrument_id == "rb2510"
         assert c.exchange == Exchange.SHFE
-        assert c.product_id == "rb"
         assert c.multiplier == 10
-        assert c.price_tick == Decimal("1")
+        assert c.tick_size == 1.0
 
     def test_str(self):
         c = _rb2510()
@@ -37,9 +33,8 @@ class TestContract:
         b = Contract(
             instrument_id="m2609",
             exchange=Exchange.DCE,
-            product_id="m",
             multiplier=10,
-            price_tick=Decimal("1"),
+            tick_size=1.0,
         )
         assert a != b
 
@@ -51,20 +46,16 @@ class TestContract:
         c = Contract(
             instrument_id="CF609",
             exchange=Exchange.CZCE,
-            product_id="CF",
             multiplier=5,
-            price_tick=Decimal("1"),
+            tick_size=1.0,
         )
         assert c.instrument_id == "CF609"
-        assert c.product_id == "CF"
 
     def test_cffex_preserves_case(self):
         c = Contract(
             instrument_id="IF2601",
             exchange=Exchange.CFFEX,
-            product_id="IF",
             multiplier=300,
-            price_tick=Decimal("0.2"),
+            tick_size=0.2,
         )
         assert c.instrument_id == "IF2601"
-        assert c.product_id == "IF"

@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 import pytest
 from unittest.mock import MagicMock
 
@@ -13,9 +11,8 @@ def make_contract(symbol, exchange=Exchange.SHFE):
     return Contract(
         instrument_id=symbol,
         exchange=exchange,
-        product_id=symbol.rstrip("0123456789"),
         multiplier=10,
-        price_tick=Decimal("1"),
+        tick_size=1.0,
     )
 
 

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from decimal import Decimal
 
 from src.common.exchange import Exchange
 
@@ -8,9 +7,8 @@ from src.common.exchange import Exchange
 class Contract:
     instrument_id: str
     exchange: Exchange
-    product_id: str
-    multiplier: int
-    price_tick: Decimal
+    multiplier: int  # 合约乘数（如螺纹钢 10 吨/手，股指 300 元/点）
+    tick_size: float  # 最小变动价位
 
     def __str__(self):
         return self.instrument_id

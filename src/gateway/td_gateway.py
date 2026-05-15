@@ -351,7 +351,7 @@ class _TdSpiProxy(tdapi.CThostFtdcTraderSpi):
                 "product_id": pInstrument.ProductID,
                 "product_class": pInstrument.ProductClass,
                 "volume_multiple": pInstrument.VolumeMultiple,
-                "price_tick": pInstrument.PriceTick,
+                "tick_size": pInstrument.PriceTick,
                 "is_trading": pInstrument.IsTrading,
                 "log_level": "info",
             }))

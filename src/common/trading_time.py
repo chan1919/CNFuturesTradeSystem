@@ -9,22 +9,20 @@ NIGHT_END = time(2, 45)
 
 
 def in_connection_window(now: datetime) -> bool:
-    current_time = now.time()
-    weekday = now.weekday()
+    t = now.time()
+    w = now.weekday()
 
-    if weekday == 0 and current_time <= NIGHT_END:
-        return False
-
-    if 0 <= weekday <= 4 and DAY_START <= current_time <= DAY_END:
+    # 日盘：周一~五 8:56–15:01
+    if 0 <= w <= 4 and DAY_START <= t <= DAY_END:
         return True
 
-    if 0 <= weekday <= 3 and (current_time >= NIGHT_START or current_time <= NIGHT_END):
-        return True
+    # 夜盘 20:56–23:59：周日~四晚（周一~五日盘前一天晚）
+    if t >= NIGHT_START:
+        return w <= 4
 
-    if weekday == 4 and (current_time >= NIGHT_START or current_time <= NIGHT_END):
-        return True
-    if weekday == 5 and current_time <= NIGHT_END:
-        return True
+    # 夜盘 0:00–2:45：周二~六凌晨（周一凌晨排除，那是周日夜盘尾巴）
+    if t <= NIGHT_END:
+        return 1 <= w <= 5
 
     return False
 

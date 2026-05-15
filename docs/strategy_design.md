@@ -17,10 +17,8 @@ Tag        — 策略实例的分组控制维度
 class Contract:
     instrument_id: str
     exchange: Exchange
-    product_id: str
     multiplier: int
-    price_tick: Decimal
-    commission: Optional[CommissionModel] = None
+    tick_size: float
 ```
 
 CTP 原生 `instrument_id` 不做任何格式转换或解析。直接使用 CTP 回调中的字段。

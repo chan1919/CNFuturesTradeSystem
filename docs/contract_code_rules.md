@@ -13,19 +13,17 @@
 
 ## 二、本项目合约模型
 
-本项目使用 CTP 原生合约代码（`instrument_id`），不做任何格式转换、大小写转换或年份位数解析。只存储 CTP 原始字段。
+本项目使用 CTP 原生合约代码（`instrument_id`），不做任何格式转换。
 
 ```python
 from src.common.contract import Contract
 from src.common.exchange import Exchange
 
-# CTP 原始代码直接传入
 c = Contract(
     instrument_id="rb2510",
     exchange=Exchange.SHFE,
-    product_id="rb",
     multiplier=10,
-    price_tick=Decimal("1"),
+    tick_size=1.0,
 )
 c.instrument_id  # "rb2510" — CTP 原始格式，不做转换
 ```
@@ -36,9 +34,8 @@ c.instrument_id  # "rb2510" — CTP 原始格式，不做转换
 |------|------|------|
 | `instrument_id` | str | CTP 原生格式（如 `rb2510`、`CF609`） |
 | `exchange` | Exchange | 交易所枚举 |
-| `product_id` | str | 产品代码（如 `rb`、`CF`、`IF`） |
-| `multiplier` | int | 合约乘数（如 10） |
-| `price_tick` | Decimal | 最小变动价位 |
+| `multiplier` | int | 合约乘数（如螺纹钢 10 吨/手，股指 300 元/点） |
+| `tick_size` | float | 最小变动价位（如 0.2、0.05） |
 
 ## 四、各交易所 Product Code 列表
 
