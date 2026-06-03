@@ -456,6 +456,40 @@ class TestTdGatewayCallbacks:
             assert received[0].data["balance"] == 150000.0
             assert received[0].data["available"] == 80000.0
 
+    def test_on_rsp_qry_instrument_puts_event(self):
+        engine = EventBus()
+        td_api = make_mock_td_api()
+
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from gateway.td_gateway import TdGateway
+            gw = TdGateway(engine)
+            spi = self._connect_and_connected(gw, td_api)
+            engine.process_one()
+
+            received = []
+            engine.register(EventType.QRV_INSTRUMENT, lambda e: received.append(e))
+
+            instrument = MagicMock()
+            instrument.InstrumentID = "rb2501"
+            instrument.ExchangeID = "SHFE"
+            instrument.ProductID = "rb"
+            instrument.ProductClass = "1"
+            instrument.VolumeMultiple = 10
+            instrument.PriceTick = 1.0
+            instrument.IsTrading = 1
+
+            spi.OnRspQryInstrument(instrument, MagicMock(ErrorID=0), 1, True)
+            engine.process_one()
+
+            assert len(received) == 1
+            assert received[0].type == EventType.QRV_INSTRUMENT
+            assert received[0].data["instrument_id"] == "rb2501"
+            assert received[0].data["exchange_id"] == "SHFE"
+            assert received[0].data["product_id"] == "rb"
+            assert received[0].data["volume_multiple"] == 10
+            assert received[0].data["tick_size"] == 1.0
+
 
 class TestTdGatewaySendOrder:
     def _connect_and_logined(self, gw, td_api):
@@ -606,3 +640,28 @@ class TestTdGatewayQuery:
 
             gw.query_account()
             td_api.ReqQryTradingAccount.assert_called_once()
+
+    def test_query_instruments_calls_req_qry(self):
+        engine = EventBus()
+        td_api = make_mock_td_api()
+
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from gateway.td_gateway import TdGateway
+            gw = TdGateway(engine, broker_id="9999", user_id="test", password="123")
+            self._connect_and_logined(gw, td_api)
+
+            gw.query_instruments()
+            td_api.ReqQryInstrument.assert_called_once()
+
+    def test_query_instruments_not_logined_raises(self):
+        engine = EventBus()
+        td_api = make_mock_td_api()
+
+        with patch("gateway.td_gateway.tdapi") as mock_tdapi:
+            mock_tdapi.CThostFtdcTraderApi.CreateFtdcTraderApi.return_value = td_api
+            from gateway.td_gateway import TdGateway
+            gw = TdGateway(engine)
+
+            with pytest.raises(RuntimeError, match="not logined"):
+                gw.query_instruments()
