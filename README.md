@@ -40,6 +40,7 @@ CNFuturesTradeSystem/
 │   ├── strategy/
 │   │   ├── bar.py
 │   │   ├── base.py
+│   │   ├── indicator.py
 │   │   └── runtime.py
 │   ├── messenger/                   ← IM 交互层
 │   │   ├── base.py
@@ -96,6 +97,7 @@ CNFuturesTradeSystem/
 
 - [bar.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/bar.py): `Bar` / `BarBuilder` / `BarCache`，提供策略侧分钟线构建与缓存工具
 - [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): `BaseStrategy` 策略基类，直接管理合约和 tick 缓存，提供下单辅助方法（`buy`/`sell`/`close_long`/`close_short`）
+- [indicator.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/indicator.py): `IndicatorService` 和基础指标函数（`sma` / `ema` / `macd`）
 - [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册/启动/停止、tick 按合约路由、order/trade 按 order_ref 路由、tag 批量控制
 
 ### `src/messenger`
@@ -119,10 +121,10 @@ CNFuturesTradeSystem/
 - `BaseStrategy` — 策略即执行体，内置 tick 缓存和下单辅助
 - `StrategyRuntime` — 按策略注册管理，tick/instrument_id 路由，order/trade 按 order_ref 路由，tag 批量控制
 - `Bar` / `BarBuilder` / `BarCache` — 策略侧独立分钟线构建与缓存工具
+- `IndicatorService` — 基于 BarCache 的基础指标服务，支持 SMA / EMA / MACD
 
 尚未完成：
 
-- IndicatorService
 - OrderManager
 
 ## Messenger 层状态
