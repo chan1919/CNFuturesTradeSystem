@@ -38,6 +38,7 @@ CNFuturesTradeSystem/
 │   │   ├── md_gateway.py
 │   │   └── td_gateway.py
 │   ├── strategy/
+│   │   ├── bar.py
 │   │   ├── base.py
 │   │   └── runtime.py
 │   ├── messenger/                   ← IM 交互层
@@ -93,7 +94,8 @@ CNFuturesTradeSystem/
 
 ### `src/strategy`
 
-- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): `BaseStrategy` 策略基类，直接管理合约、仓位、tick 缓存，提供下单辅助方法（`buy`/`sell`/`close_long`/`close_short`）
+- [bar.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/bar.py): `Bar` / `BarBuilder` / `BarCache`，提供策略侧分钟线构建与缓存工具
+- [base.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/base.py): `BaseStrategy` 策略基类，直接管理合约和 tick 缓存，提供下单辅助方法（`buy`/`sell`/`close_long`/`close_short`）
 - [runtime.py](C:/Users/suoni/Desktop/CNFuturesTradeSystem/src/strategy/runtime.py): `StrategyRuntime` 策略注册/启动/停止、tick 按合约路由、order/trade 按 order_ref 路由、tag 批量控制
 
 ### `src/messenger`
@@ -114,12 +116,12 @@ CNFuturesTradeSystem/
 
 - `Position` — 多空分列持仓模型，支持 CTP query 和成交回报更新
 - `Contract` — CTP 原生合约元数据，不做解析
-- `BaseStrategy` — 策略即执行体，内置 tick 缓存、仓位管理、下单辅助
+- `BaseStrategy` — 策略即执行体，内置 tick 缓存和下单辅助
 - `StrategyRuntime` — 按策略注册管理，tick/instrument_id 路由，order/trade 按 order_ref 路由，tag 批量控制
+- `Bar` / `BarBuilder` / `BarCache` — 策略侧独立分钟线构建与缓存工具
 
 尚未完成：
 
-- Bar / BarBuilder / BarCache
 - IndicatorService
 - OrderManager
 

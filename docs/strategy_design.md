@@ -76,6 +76,36 @@ Position 是一个纯策略模型：
 - `unrealized_pnl` 是只读 property，按需计算
 - `realized_pnl` 在平仓时累加
 
+### Bar / BarBuilder / BarCache
+
+`BarBuilder` 是策略侧独立工具，从 CTP tick 字段构建 1 分钟 OHLCV K 线；`BarCache` 按合约保存最近 N 根 K 线。
+
+```python
+class Bar:
+    instrument_id: str
+    timestamp: datetime
+    open_price: float
+    high_price: float
+    low_price: float
+    close_price: float
+    volume: int
+    open_interest: float
+    trading_day: str
+    action_day: str
+
+class BarBuilder:
+    def update_tick(self, tick: dict) -> Bar | None: ...
+    def current_bar(self, instrument_id: str) -> Bar | None: ...
+    def flush(self, instrument_id: str) -> Bar | None: ...
+
+class BarCache:
+    def add(self, bar: Bar): ...
+    def latest(self, instrument_id: str) -> Bar | None: ...
+    def get(self, instrument_id: str, count: int | None = None) -> list[Bar]: ...
+```
+
+它们不强行接入 `StrategyRuntime`。策略可以在自己的 `on_tick()` 中维护 builder/cache，避免框架对不同周期、不同合成逻辑做过早抽象。
+
 ### Strategy
 
 策略实例 = 执行单元。每个实例自己订阅合约、收 tick、下单、处理回报。**不再管理仓位**，通过 `runtime.account` 查询。
